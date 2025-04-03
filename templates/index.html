@@ -191,7 +191,6 @@
                 <h2 class="text-xl font-bold">已参与用户</h2>
                 <button id="close-participants-modal" class="text-gray-500">&times;</button>
             </div>
-            <!-- 修改部分：将搜索栏放在同一行 -->
             <div class="flex space-x-4 mb-4">
                 <select id="status-filter" class="border border-gray-400 p-2 flex-1">
                     <option value="全部用户">全部用户</option>
@@ -218,9 +217,12 @@
                     <ul id="user-list" class="list-disc pl-4 mb-4"></ul>
                 </tbody>
             </table>
-            <div class="flex justify-end mt-4">
-                <button id="prev-page" class="bg-blue-500 text-white px-4 py-2 rounded">上一页</button>
-                <button id="next-page" class="bg-blue-500 text-white px-4 py-2 rounded ml-2">下一页</button>
+            <div class="flex justify-between items-center mt-4">
+                <div id="pagination-info" class="text-gray-700"></div>
+                <div class="flex space-x-2">
+                    <button id="prev-page" class="bg-blue-500 text-white px-4 py-2 rounded">上一页</button>
+                    <button id="next-page" class="bg-blue-500 text-white px-4 py-2 rounded">下一页</button>
+                </div>
             </div>
         </div>
     </div>

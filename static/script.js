@@ -367,4 +367,95 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初始化加载群或频道列表
     loadGroups();
+
+
+        // 定义每页显示的记录数
+        const itemsPerPage = 10;
+        // 当前页码
+        let currentPage = 1;
+        // 总记录数
+        let totalItems = 0;
+        // 存储所有参与用户数据
+        let allParticipants = [];
+    
+        // 模态框显示与隐藏逻辑
+        document.getElementById('participants-btn').addEventListener('click', function () {
+            document.getElementById('participants-modal').classList.remove('hidden');
+            loadParticipants(currentPage);
+        });
+        document.getElementById('close-participants-modal').addEventListener('click', function () {
+            document.getElementById('participants-modal').classList.add('hidden');
+        });
+    
+        // 搜索参与用户逻辑
+        document.getElementById('search-btn').addEventListener('click', function () {
+            const status = document.getElementById('status-filter').value;
+            const keyword = document.getElementById('keyword-filter').value;
+            currentPage = 1; // 搜索时重置页码为 1
+            loadParticipants(currentPage, status, keyword);
+        });
+    
+        // 加载参与用户数据
+        function loadParticipants(page, status = '全部用户', keyword = '') {
+            fetch(`/get_participants?lottery_id=1&status=${status}&keyword=${keyword}`)
+              .then(response => response.json())
+              .then(data => {
+                    allParticipants = data.participants;
+                    totalItems = allParticipants.length;
+                    const startIndex = (page - 1) * itemsPerPage;
+                    const endIndex = startIndex + itemsPerPage;
+                    const currentParticipants = allParticipants.slice(startIndex, endIndex);
+    
+                    const tableBody = document.getElementById('participants-table-body');
+                    tableBody.innerHTML = '';
+                    currentParticipants.forEach(participant => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td class="px-4 py-2">${participant.nickname}</td>
+                            <td class="px-4 py-2">${participant.user_id}</td>
+                            <td class="px-4 py-2">${participant.username}</td>
+                            <td class="px-4 py-2">${participant.status}</td>
+                            <td class="px-4 py-2">${participant.join_time}</td>
+                            <td class="px-4 py-2">操作</td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+    
+                    updatePaginationInfo(page);
+                });
+        }
+    
+        // 更新分页信息显示区域
+        function updatePaginationInfo(page) {
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+            const paginationInfo = document.getElementById('pagination-info');
+            paginationInfo.textContent = `第 ${page} 页，共 ${totalPages} 页`;
+    
+            const prevPageBtn = document.getElementById('prev-page');
+            const nextPageBtn = document.getElementById('next-page');
+    
+            prevPageBtn.disabled = page === 1;
+            nextPageBtn.disabled = page === totalPages;
+        }
+    
+        // 上一页按钮点击事件处理
+        document.getElementById('prev-page').addEventListener('click', function () {
+            if (currentPage > 1) {
+                currentPage--;
+                const status = document.getElementById('status-filter').value;
+                const keyword = document.getElementById('keyword-filter').value;
+                loadParticipants(currentPage, status, keyword);
+            }
+        });
+    
+        // 下一页按钮点击事件处理
+        document.getElementById('next-page').addEventListener('click', function () {
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                const status = document.getElementById('status-filter').value;
+                const keyword = document.getElementById('keyword-filter').value;
+                loadParticipants(currentPage, status, keyword);
+            }
+        });
 });
