@@ -1,56 +1,69 @@
 from flask import Flask, render_template, request, jsonify
+import os
 import sqlite3
 from datetime import datetime
+import logging
 
 app = Flask(__name__)
 
-# 封装数据库连接和关闭操作
-def get_db_connection():
-    conn = sqlite3.connect('lottery.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+# 配置日志记录
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# 数据库连接上下文管理器
+class DatabaseConnection:
+    def __init__(self, db_name):
+        self.db_name = db_name
+
+    def __enter__(self):
+        self.conn = sqlite3.connect(self.db_name)
+        return self.conn.cursor()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is None:
+            self.conn.commit()
+        else:
+            self.conn.rollback()
+        self.conn.close()
 
 # 初始化数据库
 def init_db():
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS lotteries
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 creator_info TEXT,
-                 title TEXT,
-                 media_type TEXT,
-                 description TEXT,
-                 join_method TEXT,
-                 join_condition TEXT,
-                 groups TEXT,
-                 draw_method TEXT,
-                 participant_count INTEGER,
-                 created_at DATETIME)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS prizes
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 lottery_id INTEGER,
-                 name TEXT,
-                 total_count INTEGER,
-                 remaining_count INTEGER,
-                 FOREIGN KEY (lottery_id) REFERENCES lotteries(id))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS participants
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 lottery_id INTEGER,
-                 nickname TEXT,
-                 user_id TEXT,
-                 username TEXT,
-                 status TEXT,
-                 join_time DATETIME,
-                 FOREIGN KEY (lottery_id) REFERENCES lotteries(id))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS notification_settings
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 lottery_id INTEGER,
-                 winner_private_notice TEXT,
-                 creator_private_notice TEXT,
-                 group_notice TEXT,
-                 FOREIGN KEY (lottery_id) REFERENCES lotteries(id))''')
-    conn.commit()
-    conn.close()
+    with DatabaseConnection('lottery.db') as c:
+        c.execute('''CREATE TABLE IF NOT EXISTS lotteries
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     creator_info TEXT,
+                     title TEXT,
+                     media_type TEXT,
+                     description TEXT,
+                     join_method TEXT,
+                     join_condition TEXT,
+                     groups TEXT,
+                     draw_method TEXT,
+                     participant_count INTEGER,
+                     created_at DATETIME)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS prizes
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     lottery_id INTEGER,
+                     name TEXT,
+                     total_count INTEGER,
+                     remaining_count INTEGER,
+                     FOREIGN KEY (lottery_id) REFERENCES lotteries(id))''')
+        c.execute('''CREATE TABLE IF NOT EXISTS participants
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     lottery_id INTEGER,
+                     nickname TEXT,
+                     user_id TEXT,
+                     username TEXT,
+                     status TEXT,
+                     join_time DATETIME,
+                     FOREIGN KEY (lottery_id) REFERENCES lotteries(id))''')
+        c.execute('''CREATE TABLE IF NOT EXISTS notification_settings
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     lottery_id INTEGER,
+                     winner_private_notice TEXT,
+                     creator_private_notice TEXT,
+                     group_notice TEXT,
+                     FOREIGN KEY (lottery_id) REFERENCES lotteries(id))''')
 
 @app.route('/')
 def index():
@@ -72,17 +85,14 @@ def create_lottery():
         participant_count = int(data.get('participant_count'))
         created_at = datetime.now()
 
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("INSERT INTO lotteries (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                  (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, created_at))
-        lottery_id = c.lastrowid
-        conn.commit()
-        conn.close()
-
+        with DatabaseConnection('lottery.db') as c:
+            c.execute("INSERT INTO lotteries (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                      (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, created_at))
+            lottery_id = c.lastrowid
         return jsonify({'status': 'success', 'lottery_id': lottery_id})
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"创建抽奖活动时出错: {e}")
+        return jsonify({'status': 'error', 'message': '创建抽奖活动时出错，请稍后重试'})
 
 @app.route('/add_prize', methods=['POST'])
 def add_prize():
@@ -93,16 +103,13 @@ def add_prize():
         total_count = int(data.get('total_count'))
         remaining_count = total_count
 
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("INSERT INTO prizes (lottery_id, name, total_count, remaining_count) VALUES (?,?,?,?)",
-                  (lottery_id, name, total_count, remaining_count))
-        conn.commit()
-        conn.close()
-
+        with DatabaseConnection('lottery.db') as c:
+            c.execute("INSERT INTO prizes (lottery_id, name, total_count, remaining_count) VALUES (?,?,?,?)",
+                      (lottery_id, name, total_count, remaining_count))
         return jsonify({'status': 'success'})
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"添加奖品时出错: {e}")
+        return jsonify({'status': 'error', 'message': '添加奖品时出错，请稍后重试'})
 
 @app.route('/get_participants', methods=['GET'])
 def get_participants():
@@ -111,8 +118,6 @@ def get_participants():
         status = request.args.get('status')
         keyword = request.args.get('keyword')
 
-        conn = get_db_connection()
-        c = conn.cursor()
         query = "SELECT nickname, user_id, username, status, join_time FROM participants WHERE lottery_id =? "
         params = [lottery_id]
         if status and status != '全部用户':
@@ -121,57 +126,56 @@ def get_participants():
         if keyword:
             query += "AND (nickname LIKE? OR user_id LIKE?)"
             params.extend([f'%{keyword}%', f'%{keyword}%'])
-        c.execute(query, params)
-        participants = c.fetchall()
-        conn.close()
+
+        with DatabaseConnection('lottery.db') as c:
+            c.execute(query, params)
+            participants = c.fetchall()
 
         result = []
         for participant in participants:
             result.append({
-                'nickname': participant['nickname'],
-                'user_id': participant['user_id'],
-                'username': participant['username'],
-                'status': participant['status'],
-                'join_time': participant['join_time']
+                'nickname': participant[0],
+                'user_id': participant[1],
+                'username': participant[2],
+                'status': participant[3],
+                'join_time': participant[4]
             })
         return jsonify({'participants': result})
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"获取参与者信息时出错: {e}")
+        return jsonify({'status': 'error', 'message': '获取参与者信息时出错，请稍后重试'})
 
 @app.route('/get_prizes', methods=['GET'])
 def get_prizes():
     try:
         lottery_id = request.args.get('lottery_id')
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT id, name, total_count, remaining_count FROM prizes WHERE lottery_id =?", (lottery_id,))
-        prizes = c.fetchall()
-        conn.close()
+        with DatabaseConnection('lottery.db') as c:
+            c.execute("SELECT id, name, total_count, remaining_count FROM prizes WHERE lottery_id =?", (lottery_id,))
+            prizes = c.fetchall()
 
         result = []
         for prize in prizes:
             result.append({
-                'id': prize['id'],
-                'name': prize['name'],
-                'total_count': prize['total_count'],
-                'remaining_count': prize['remaining_count']
+                'id': prize[0],
+                'name': prize[1],
+                'total_count': prize[2],
+                'remaining_count': prize[3]
             })
         return jsonify({'prizes': result})
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"获取奖品信息时出错: {e}")
+        return jsonify({'status': 'error', 'message': '获取奖品信息时出错，请稍后重试'})
 
 @app.route('/delete_prize', methods=['POST'])
 def delete_prize():
     try:
         prize_id = int(request.form.get('prize_id'))
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("DELETE FROM prizes WHERE id =?", (prize_id,))
-        conn.commit()
-        conn.close()
+        with DatabaseConnection('lottery.db') as c:
+            c.execute("DELETE FROM prizes WHERE id =?", (prize_id,))
         return jsonify({'status': 'success'})
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"删除奖品时出错: {e}")
+        return jsonify({'status': 'error', 'message': '删除奖品时出错，请稍后重试'})
 
 @app.route('/save_notification_settings', methods=['POST'])
 def save_notification_settings():
@@ -182,16 +186,13 @@ def save_notification_settings():
         creator_private_notice = data.get('creator_private_notice')
         group_notice = data.get('group_notice')
 
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("INSERT INTO notification_settings (lottery_id, winner_private_notice, creator_private_notice, group_notice) VALUES (?,?,?,?)",
-                  (lottery_id, winner_private_notice, creator_private_notice, group_notice))
-        conn.commit()
-        conn.close()
-
+        with DatabaseConnection('lottery.db') as c:
+            c.execute("INSERT INTO notification_settings (lottery_id, winner_private_notice, creator_private_notice, group_notice) VALUES (?,?,?,?)",
+                      (lottery_id, winner_private_notice, creator_private_notice, group_notice))
         return jsonify({'status': 'success'})
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"保存通知设置时出错: {e}")
+        return jsonify({'status': 'error', 'message': '保存通知设置时出错，请稍后重试'})
 
 @app.route('/edit_prize', methods=['POST'])
 def edit_prize():
@@ -201,15 +202,12 @@ def edit_prize():
         name = data.get('name')
         total_count = int(data.get('total_count'))
 
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("UPDATE prizes SET name =?, total_count =? WHERE id =?", (name, total_count, prize_id))
-        conn.commit()
-        conn.close()
-
+        with DatabaseConnection('lottery.db') as c:
+            c.execute("UPDATE prizes SET name =?, total_count =? WHERE id =?", (name, total_count, prize_id))
         return jsonify({'status': 'success'})
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"编辑奖品时出错: {e}")
+        return jsonify({'status': 'error', 'message': '编辑奖品时出错，请稍后重试'})
 
 # 模拟抽奖数据存储
 lotteries = {
@@ -227,7 +225,8 @@ def cancel_lottery():
         else:
             return jsonify({'status': 'error', 'message': '未找到该抽奖活动'})
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"取消抽奖时出错: {e}")
+        return jsonify({'status': 'error', 'message': '取消抽奖时出错，请稍后重试'})
 
 if __name__ == '__main__':
     init_db()
