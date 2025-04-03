@@ -57,14 +57,14 @@
                 </div>
                 <div class="mb-4 flex items-center">
                     <label class="text-gray-700 font-bold mr-2">参与方式</label>
-                    <input type="radio" id="private-chat" name="join_method" value="私聊机器人" checked>
+                    <input type="radio" id="private-chat" name="join_method" value="private_chat_bot" checked>
                     <label for="private-chat">私聊机器人</label>
-                    <input type="radio" id="group-keyword" name="join_method" value="群内发送关键词参与抽奖">
+                    <input type="radio" id="group-keyword" name="join_method" value="send_keywords_in_group">
                     <label for="group-keyword">群内发送关键词参与抽奖</label>
                 </div>
                 <div class="mb-4 flex items-center">
                     <label for="join-condition" class="text-gray-700 font-bold mr-2">参与条件</label>
-                    <input type="checkbox" id="username-condition" name="join_condition" value="必须有用户名">
+                    <input type="checkbox" id="username-condition" name="join_condition" value="have_username">
                     <label for="username-condition" class="ml-1">必须有用户名</label>
                 </div>
                 <div class="mb-4 flex items-center">
@@ -86,9 +86,9 @@
                 </div>
                 <div class="mb-4">
                     <label class="block text-gray-700 font-bold mb-2">开奖方式</label>
-                    <input type="radio" id="full-participants" name="draw_method" value="满人开奖" checked>
+                    <input type="radio" id="full-participants" name="draw_method" value="enough_lottery" checked>
                     <label for="full-participants">满人开奖</label>
-                    <input type="radio" id="timed-draw" name="draw_method" value="定时开奖">
+                    <input type="radio" id="timed-draw" name="draw_method" value="timed_lottery">
                     <label for="timed-draw">定时开奖</label>
                 </div>
                 <div class="mb-4">
@@ -193,11 +193,11 @@
             </div>
             <div class="flex space-x-4 mb-4">
                 <select id="status-filter" class="border border-gray-400 p-2 flex-1">
-                    <option value="全部用户">全部用户</option>
-                    <option value="已中奖用户">已中奖用户</option>
-                    <option value="已禁止抽奖">已禁止抽奖</option>
-                    <option value="已取消奖品">已取消奖品</option>
-                    <option value="已领取奖品">已领取奖品</option>
+                    <option value="all_user">全部用户</option>
+                    <option value="Winning_user">已中奖用户</option>
+                    <option value="banned_user">已禁止抽奖</option>
+                    <option value="cancelled_user">已取消奖品</option>
+                    <option value="rece_user">已领取奖品</option>
                 </select>
                 <input type="text" id="keyword-filter" class="border border-gray-400 p-2 flex-2" placeholder="用户昵称/用户id">
                 <button id="search-btn" class="bg-blue-500 text-white px-4 py-2 rounded">搜索</button>
