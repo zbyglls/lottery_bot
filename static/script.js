@@ -8,56 +8,34 @@ function showTab(tabId) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 通用的打开模态框函数
-    function openModal(modalId) {
-        const modal = document.getElementById(modalId);
-        modal.classList.add('show');
-        setTimeout(() => {
-            modal.classList.add('fade-in');
-        }, 50);
-    }
-
-    // 通用的关闭模态框函数
-    function closeModal(modalId) {
-        const modal = document.getElementById(modalId);
-        modal.classList.remove('fade-in');
-        setTimeout(() => {
-            modal.classList.remove('show');
-        }, 300);
-    }
-
+    // 参与者模态框显示与隐藏
     document.getElementById('participants-btn').addEventListener('click', function () {
-        openModal('participants-modal');
+        document.getElementById('participants-modal').classList.remove('hidden');
     });
     document.getElementById('close-participants-modal').addEventListener('click', function () {
-        closeModal('participants-modal');
-    });
-    document.getElementById('add-group-btn').addEventListener('click', function () {
-        openModal('add-group-modal');
-    });
-    document.getElementById('close-add-group-modal').addEventListener('click', function () {
-        closeModal('add-group-modal');
-    });
-    document.getElementById('add-prize-btn').addEventListener('click', function () {
-        openModal('add-prize-modal');
-    });
-    document.getElementById('close-add-prize-modal').addEventListener('click', function () {
-        closeModal('add-prize-modal');
-    });
-    document.getElementById('close-edit-prize-modal').addEventListener('click', function () {
-        closeModal('edit-prize-modal');
-    });
-    document.getElementById('cancel-edit-prize').addEventListener('click', function () {
-        closeModal('edit-prize-modal');
-        document.getElementById('edit-prize-name').value = '';
-        document.getElementById('edit-prize-count').value = '';
+        document.getElementById('participants-modal').classList.add('hidden');
     });
 
+    // 添加群或频道模态框显示与隐藏
+    document.getElementById('add-group-btn').addEventListener('click', function () {
+        document.getElementById('add-group-modal').classList.remove('hidden');
+    });
+    document.getElementById('close-add-group-modal').addEventListener('click', function () {
+        document.getElementById('add-group-modal').classList.add('hidden');
+    });
+
+    // 搜索参与者
     document.getElementById('search-btn').addEventListener('click', function () {
         const status = document.getElementById('status-filter').value;
         const keyword = document.getElementById('keyword-filter').value;
-        fetch(`/get_participants?lottery_id=1&status=${status}&keyword=${keyword}`)
-          .then(response => response.json())
+        const lotteryId = 1; // 这里可根据实际情况动态获取
+        fetch(`/get_participants?lottery_id=${lotteryId}&status=${status}&keyword=${keyword}`)
+          .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应错误');
+                }
+                return response.json();
+            })
           .then(data => {
                 const tableBody = document.getElementById('participants-table-body');
                 tableBody.innerHTML = '';
@@ -73,8 +51,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     tableBody.appendChild(row);
                 });
+            })
+          .catch(error => {
+                console.error('获取参与者数据出错:', error);
+                alert('获取参与者数据失败，请稍后重试');
             });
     });
+
+    // 创建抽奖活动
     document.getElementById('lottery-form').addEventListener('submit', function (e) {
         e.preventDefault();
         const description = document.getElementById('description');
@@ -84,34 +68,70 @@ document.addEventListener('DOMContentLoaded', () => {
             method: 'POST',
             body: formData
         })
-          .then(response => response.json())
+          .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应错误');
+                }
+                return response.json();
+            })
           .then(data => {
                 if (data.status === 'success') {
                     alert('抽奖创建成功');
+                } else {
+                    alert('抽奖创建失败，请稍后重试');
                 }
+            })
+          .catch(error => {
+                console.error('创建抽奖活动出错:', error);
+                alert('创建抽奖活动失败，请稍后重试');
             });
     });
 
+    // 添加奖品模态框显示与隐藏
+    document.getElementById('add-prize-btn').addEventListener('click', function () {
+        document.getElementById('add-prize-modal').classList.remove('hidden');
+    });
+    document.getElementById('close-add-prize-modal').addEventListener('click', function () {
+        document.getElementById('add-prize-modal').classList.add('hidden');
+    });
+
+    // 确认添加奖品
     document.getElementById('confirm-add-prize').addEventListener('click', function () {
         const name = document.getElementById('prize-name').value;
         const totalCount = document.getElementById('prize-count').value;
+        if (!name ||!totalCount) {
+            alert('请输入奖品名称和数量');
+            return;
+        }
         const formData = new FormData();
-        formData.append('lottery_id', 1);
+        formData.append('lottery_id', 1); // 这里可根据实际情况动态获取
         formData.append('name', name);
         formData.append('total_count', totalCount);
         fetch('/add_prize', {
             method: 'POST',
             body: formData
         })
-          .then(response => response.json())
+          .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应错误');
+                }
+                return response.json();
+            })
           .then(data => {
                 if (data.status === 'success') {
-                    closeModal('add-prize-modal');
+                    document.getElementById('add-prize-modal').classList.add('hidden');
                     loadPrizes();
+                } else {
+                    alert('添加奖品失败，请稍后重试');
                 }
+            })
+          .catch(error => {
+                console.error('添加奖品出错:', error);
+                alert('添加奖品失败，请稍后重试');
             });
     });
 
+    // 媒体类型选择时更新链接可见性
     const mediaTypeSelect = document.getElementById('media-type');
     const imageLinkContainer = document.getElementById('image-link-container');
     const videoLinkContainer = document.getElementById('video-link-container');
@@ -133,29 +153,26 @@ document.addEventListener('DOMContentLoaded', () => {
     updateLinkVisibility();
     mediaTypeSelect.addEventListener('change', updateLinkVisibility);
 
-    // 获取取消抽奖按钮
+    // 取消抽奖
     const cancelLotteryBtn = document.getElementById('cancel-lottery-btn');
-
-    // 为取消抽奖按钮添加点击事件监听器
     cancelLotteryBtn.addEventListener('click', () => {
-        // 弹出确认框，让用户确认是否取消抽奖
         if (confirm('你确定要取消本次抽奖吗？')) {
-            // 模拟抽奖 ID，实际应用中应从页面或数据中获取
-            const lotteryId = 1; 
-
-            // 发送请求到后端取消抽奖
+            const lotteryId = 1; // 这里可根据实际情况动态获取
             fetch(`/cancel_lottery?lottery_id=${lotteryId}`, {
                 method: 'GET'
             })
-           .then(response => response.json())
+           .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应错误');
+                }
+                return response.json();
+            })
            .then(data => {
                 if (data.status === 'success') {
-                    // 取消成功，给出提示并进行相应操作，如刷新页面
                     alert('抽奖已成功取消');
                     // 可以在这里添加刷新页面或更新页面状态的代码
                     // location.reload(); 
                 } else {
-                    // 取消失败，给出提示
                     alert('取消抽奖失败，请稍后重试');
                 }
             })
@@ -165,9 +182,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     });
-
-    // 初始化加载群或频道列表
-    loadGroups();
 
     // 加载群或频道列表
     function loadGroups() {
@@ -195,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 事件委托处理删除按钮点击事件
+    // 事件委托处理删除群或频道按钮点击事件
     document.getElementById('group-table-body').addEventListener('click', function (event) {
         if (event.target.tagName === 'BUTTON') {
             const groupId = parseInt(event.target.dataset.groupId);
@@ -212,9 +226,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // 加载奖品列表
     function loadPrizes() {
-        fetch('/get_prizes?lottery_id=1')
-          .then(response => response.json())
+        const lotteryId = 1; // 这里可根据实际情况动态获取
+        fetch(`/get_prizes?lottery_id=${lotteryId}`)
+          .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应错误');
+                }
+                return response.json();
+            })
           .then(data => {
                 const tableBody = document.getElementById('prize-table-body');
                 tableBody.innerHTML = '';
@@ -231,9 +252,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     tableBody.appendChild(row);
                 });
+            })
+          .catch(error => {
+                console.error('获取奖品数据出错:', error);
+                alert('获取奖品数据失败，请稍后重试');
             });
     }
 
+    // 删除奖品
     function deletePrize(prizeId) {
         if (confirm('是否删除该奖品？')) {
             const formData = new FormData();
@@ -242,26 +268,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 body: formData
             })
-              .then(response => response.json())
+              .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络响应错误');
+                    }
+                    return response.json();
+                })
               .then(data => {
                     if (data.status === 'success') {
                         loadPrizes();
+                    } else {
+                        alert('删除奖品失败，请稍后重试');
                     }
+                })
+              .catch(error => {
+                    console.error('删除奖品出错:', error);
+                    alert('删除奖品失败，请稍后重试');
                 });
         }
     }
 
+    // 编辑奖品模态框显示与填充数据
     function editPrize(prizeId, name, totalCount) {
         document.getElementById('edit-prize-id').value = prizeId;
         document.getElementById('edit-prize-name').value = name;
         document.getElementById('edit-prize-count').value = totalCount;
-        openModal('edit-prize-modal');
+        document.getElementById('edit-prize-modal').classList.remove('hidden');
     }
 
+    // 关闭编辑奖品模态框
+    document.getElementById('close-edit-prize-modal').addEventListener('click', function () {
+        document.getElementById('edit-prize-modal').classList.add('hidden');
+    });
+
+    // 取消编辑奖品
+    document.getElementById('cancel-edit-prize').addEventListener('click', function () {
+        document.getElementById('edit-prize-modal').classList.add('hidden');
+        document.getElementById('edit-prize-name').value = '';
+        document.getElementById('edit-prize-count').value = '';
+    });
+
+    // 确认编辑奖品
     document.getElementById('confirm-edit-prize').addEventListener('click', function () {
         const prizeId = document.getElementById('edit-prize-id').value;
         const name = document.getElementById('edit-prize-name').value;
         const totalCount = document.getElementById('edit-prize-count').value;
+        if (!name ||!totalCount) {
+            alert('请输入奖品名称和数量');
+            return;
+        }
         const formData = new FormData();
         formData.append('prize_id', prizeId);
         formData.append('name', name);
@@ -270,18 +325,28 @@ document.addEventListener('DOMContentLoaded', () => {
             method: 'POST',
             body: formData
         })
-          .then(response => response.json())
+          .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应错误');
+                }
+                return response.json();
+            })
           .then(data => {
                 if (data.status === 'success') {
-                    closeModal('edit-prize-modal');
+                    document.getElementById('edit-prize-modal').classList.add('hidden');
                     loadPrizes();
                     alert('奖品编辑成功');
                 } else {
-                    alert('奖品编辑失败');
+                    alert('奖品编辑失败，请稍后重试');
                 }
+            })
+          .catch(error => {
+                console.error('编辑奖品出错:', error);
+                alert('编辑奖品失败，请稍后重试');
             });
     });
 
+    // 初始化富文本编辑器
     const descriptionEditor = new Quill('#description-editor', {
         theme: 'snow'
     });
@@ -304,6 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
     creatorPrivateNoticeEditor.root.innerHTML = defaultCreatorPrivateNotice;
     groupNoticeEditor.root.innerHTML = defaultGroupNotice;
 
+    // 保存通知设置
     document.getElementById('save-notification-settings').addEventListener('click', function () {
         const winnerPrivateNotice = document.getElementById('winner-private-notice');
         winnerPrivateNotice.value = winnerPrivateNoticeEditor.root.innerHTML;
@@ -313,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
         groupNotice.value = groupNoticeEditor.root.innerHTML;
 
         const formData = new FormData();
-        formData.append('lottery_id', 1);
+        formData.append('lottery_id', 1); // 这里可根据实际情况动态获取
         formData.append('winner_private_notice', winnerPrivateNotice.value);
         formData.append('creator_private_notice', creatorPrivateNotice.value);
         formData.append('group_notice', groupNotice.value);
@@ -322,45 +388,46 @@ document.addEventListener('DOMContentLoaded', () => {
             method: 'POST',
             body: formData
         })
-          .then(response => response.json())
+          .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应错误');
+                }
+                return response.json();
+            })
           .then(data => {
                 if (data.status === 'success') {
                     alert('通知设置保存成功');
                 } else {
-                    alert('通知设置保存失败');
+                    alert('通知设置保存失败，请稍后重试');
                 }
+            })
+          .catch(error => {
+                console.error('保存通知设置出错:', error);
+                alert('保存通知设置失败，请稍后重试');
             });
     });
 
-    // 取消按钮功能
+    // 取消添加群或频道
     document.getElementById('cancel-add-group').addEventListener('click', function () {
-        closeModal('add-group-modal');
+        document.getElementById('add-group-modal').classList.add('hidden');
         document.getElementById('group-info').value = '';
     });
 
-    // 确认按钮功能
+    // 确认添加群或频道
     document.getElementById('confirm-add-group').addEventListener('click', function () {
         const groupInfo = document.getElementById('group-info').value;
         if (groupInfo) {
             // 这里可以添加保存群信息的逻辑
+            alert('群信息保存成功');
+            document.getElementById('add-group-modal').classList.add('hidden');
+            document.getElementById('group-info').value = '';
+            loadGroups();
+        } else {
+            alert('请输入群信息');
         }
     });
 
-    // 渲染当前页的用户列表
-    function renderUsers() {
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        const currentUsers = users.slice(startIndex, endIndex);
-
-        userList.innerHTML = '';
-        currentUsers.forEach(user => {
-            const listItem = document.createElement('li');
-            listItem.textContent = user.name;
-            userList.appendChild(listItem);
-        });
-
-        // 更新按钮状态
-        prevPageButton.disabled = currentPage === 1;
-        nextPageButton.disabled = currentPage === totalPages;
-    }
+    // 初始化加载群或频道列表和奖品列表
+    loadGroups();
+    loadPrizes();
 });
