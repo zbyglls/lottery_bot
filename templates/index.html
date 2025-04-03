@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抽奖设置</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" rel="stylesheet">
+    <link rel="stylesheet" href="static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
+    <script src="static/script.js"></script>
+</head>
+
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <h1 class="text-2xl font-bold mb-4">抽奖设置 - {{ creator_info }}</h1>
+        <div class="flex justify-between items-center mb-4">
+            <ul class="flex space-x-4">
+                <li><a href="#" class="text-blue-500 font-bold" onclick="showTab('basic-info')">基础信息</a></li>
+                <li><a href="#" class="text-gray-500" onclick="showTab('prize-settings')">奖品设置</a></li>
+                <li><a href="#" class="text-gray-500" onclick="showTab('notification-settings')">通知设置</a></li>
+            </ul>
+            <div class="flex space-x-4">
+                <button id="participants-btn" class="bg-blue-500 text-white px-4 py-2 rounded">已参与用户</button>
+                <button id="cancel-lottery-btn" class="bg-red-500 text-white px-4 py-2 rounded">取消抽奖</button>
+            </div>
+        </div>
+        <div id="basic-info" class="block">
+            <form id="lottery-form">
+                <input type="hidden" name="creator_info" value="{{ creator_info }}">
+                <div class="mb-4">
+                    <label for="title" class="block text-gray-700 font-bold mb-2">抽奖标题</label>
+                    <input type="text" id="title" name="title" class="border border-gray-400 p-2 w-full" required>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-700 font-bold w-1/6">图片或视频</span>
+                    <select id="media-type" class="border border-gray-300 p-2 rounded" style="width: 16.666667%;">
+                        <option value="none">无</option>
+                        <option value="image">图片</option>
+                        <option value="video">视频</option>
+                    </select>
+                    <div id="image-link-container" class="flex-1 hidden w-4/6">
+                        <input type="text" id="image-link" class="border border-gray-300 p-2 w-full rounded"
+                            placeholder="图片链接">
+                    </div>
+                    <div id="video-link-container" class="flex-1 hidden w-4/6">
+                        <input type="text" id="video-link" class="border border-gray-300 p-2 w-full rounded"
+                            placeholder="视频链接">
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label for="description" class="block text-gray-700 font-bold mb-2">抽奖文字说明</label>
+                    <div id="description-editor" class="border border-gray-400 p-2 w-full h-40"></div>
+                    <input type="hidden" id="description" name="description">
+                </div>
+                <div class="mb-4 flex items-center">
+                    <label class="text-gray-700 font-bold mr-2">参与方式</label>
+                    <input type="radio" id="private-chat" name="join_method" value="私聊机器人" checked>
+                    <label for="private-chat">私聊机器人</label>
+                    <input type="radio" id="group-keyword" name="join_method" value="群内发送关键词参与抽奖">
+                    <label for="group-keyword">群内发送关键词参与抽奖</label>
+                </div>
+                <div class="mb-4 flex items-center">
+                    <label for="join-condition" class="text-gray-700 font-bold mr-2">参与条件</label>
+                    <input type="checkbox" id="username-condition" name="join_condition" value="必须有用户名">
+                    <label for="username-condition" class="ml-1">必须有用户名</label>
+                </div>
+                <div class="mb-4 flex items-center">
+                    <label class="block text-gray-700 font-bold mr-2">需要成员加入的群或频道</label>
+                    <button id="add-group-btn" class="bg-blue-500 text-white px-4 py-2 rounded">添加</button>
+                </div>
+                <div class="mb-4">
+                    <table class="table-auto w-full mt-2">
+                        <thead>
+                            <tr>
+                                <th class="px-4 py-2">群/频道id</th>
+                                <th class="px-4 py-2">群/频道用户名</th>
+                                <th class="px-4 py-2">群/频道名称</th>
+                                <th class="px-4 py-2">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="group-table-body"></tbody>
+                    </table>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-bold mb-2">开奖方式</label>
+                    <input type="radio" id="full-participants" name="draw_method" value="满人开奖" checked>
+                    <label for="full-participants">满人开奖</label>
+                    <input type="radio" id="timed-draw" name="draw_method" value="定时开奖">
+                    <label for="timed-draw">定时开奖</label>
+                </div>
+                <div class="mb-4">
+                    <label for="participant-count" class="block text-gray-700 font-bold mb-2">参与人数</label>
+                    <input type="number" id="participant-count" name="participant_count" class="border border-gray-400 p-2 w-full" required>
+                </div>
+                <div class="flex justify-center">
+                    <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded">提交</button>
+                </div>
+            </form>
+        </div>
+        <div id="prize-settings" class="hidden">
+            <button id="add-prize-btn" class="bg-blue-500 text-white px-4 py-2 rounded mb-4">+ 添加奖品</button>
+            <table class="table-auto w-full">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-2">奖品名称</th>
+                        <th class="px-4 py-2">奖品总数</th>
+                        <th class="px-4 py-2">剩余数量</th>
+                        <th class="px-4 py-2">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="prize-table-body"></tbody>
+            </table>
+            <div id="add-prize-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 hidden">
+                <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">添加奖品</h2>
+                        <button id="close-add-prize-modal" class="text-gray-500">&times;</button>
+                    </div>
+                    <div class="mb-4">
+                        <label for="prize-name" class="block text-gray-700 font-bold mb-2">奖品名称</label>
+                        <input type="text" id="prize-name" class="border border-gray-400 p-2 w-full" placeholder="输入奖品名称">
+                    </div>
+                    <div class="mb-4">
+                        <label for="prize-count" class="block text-gray-700 font-bold mb-2">奖品数量</label>
+                        <input type="number" id="prize-count" class="border border-gray-400 p-2 w-full" placeholder="输入奖品数量">
+                    </div>
+                    <div class="flex justify-end">
+                        <button id="cancel-add-prize" class="bg-gray-500 text-white px-4 py-2 rounded">取消</button>
+                        <button id="confirm-add-prize" class="bg-blue-500 text-white px-4 py-2 rounded ml-2">确定</button>
+                    </div>
+                </div>
+            </div>
+            <div id="edit-prize-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 hidden">
+                <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">编辑奖品</h2>
+                        <button id="close-edit-prize-modal" class="text-gray-500">&times;</button>
+                    </div>
+                    <input type="hidden" id="edit-prize-id">
+                    <div class="mb-4">
+                        <label for="edit-prize-name" class="block text-gray-700 font-bold mb-2">奖品名称</label>
+                        <input type="text" id="edit-prize-name" class="border border-gray-400 p-2 w-full" placeholder="输入奖品名称">
+                    </div>
+                    <div class="mb-4">
+                        <label for="edit-prize-count" class="block text-gray-700 font-bold mb-2">奖品数量</label>
+                        <input type="number" id="edit-prize-count" class="border border-gray-400 p-2 w-full" placeholder="输入奖品数量">
+                    </div>
+                    <div class="flex justify-end">
+                        <button id="cancel-edit-prize" class="bg-gray-500 text-white px-4 py-2 rounded">取消</button>
+                        <button id="confirm-edit-prize" class="bg-blue-500 text-white px-4 py-2 rounded ml-2">确定</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="notification-settings" class="hidden">
+            <div class="mb-4">
+                <label for="winner-private-notice" class="block text-gray-700 font-bold mb-2">中奖私聊中奖人通知</label>
+                <div id="winner-private-notice-editor" class="border border-gray-400 p-2 w-full h-40"></div>
+                <input type="hidden" id="winner-private-notice" name="winner_private_notice">
+                <p class="text-gray-500">
+                    {member}表示中奖用户，{lotteryTitle}表示活动标题，{goodsName}表示奖品名称，{creator}表示创建人，{creatorId}表示创建人ID，{creatorName}表示创建人昵称
+                </p>
+            </div>
+            <div class="mb-4">
+                <label for="creator-private-notice" class="block text-gray-700 font-bold mb-2">中奖私聊创建人通知</label>
+                <div id="creator-private-notice-editor" class="border border-gray-400 p-2 w-full h-40"></div>
+                <input type="hidden" id="creator-private-notice" name="creator_private_notice">
+                <p class="text-gray-500">
+                    {lotteryTitle}表示活动标题，{lotterySn}表示抽奖编号，{awardUserList}表示中奖名单
+                </p>
+            </div>
+            <div class="mb-4">
+                <label for="group-notice" class="block text-gray-700 font-bold mb-2">中奖发送到群/频道通知</label>
+                <div id="group-notice-editor" class="border border-gray-400 p-2 w-full h-40"></div>
+                <input type="hidden" id="group-notice" name="group_notice">
+                <p class="text-gray-500">
+                    {lotteryTitle}表示活动标题，{lotterySn}表示抽奖编号，{creator}表示创建人，{creatorId}表示创建人ID，{creatorName}表示创建人昵称，{joinNum}表示已参与人数，{awardUserList}表示中奖名单
+                </p>
+            </div>
+            <div class="flex justify-center">
+                <button id="save-notification-settings" class="bg-green-500 text-white px-4 py-2 rounded">保存通知设置</button>
+            </div>
+        </div>
+    </div>
+    <div id="participants-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 hidden">
+        <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">已参与用户</h2>
+                <button id="close-participants-modal" class="text-gray-500">&times;</button>
+            </div>
+            <div class="mb-4">
+                <select id="status-filter" class="border border-gray-400 p-2">
+                    <option value="全部用户">全部用户</option>
+                    <option value="已中奖用户">已中奖用户</option>
+                    <option value="已禁止抽奖">已禁止抽奖</option>
+                    <option value="已取消奖品">已取消奖品</option>
+                    <option value="已领取奖品">已领取奖品</option>
+                </select>
+                <input type="text" id="keyword-filter" class="border border-gray-400 p-2" placeholder="用户昵称/用户id">
+                <button id="search-btn" class="bg-blue-500 text-white px-4 py-2 rounded">搜索</button>
+            </div>
+            <table class="table-auto w-full">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-2">用户昵称</th>
+                        <th class="px-4 py-2">用户ID</th>
+                        <th class="px-4 py-2">用户名</th>
+                        <th class="px-4 py-2">用户状态</th>
+                        <th class="px-4 py-2">参与时间</th>
+                        <th class="px-4 py-2">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="participants-table-body">
+                    <ul id="user-list" class="list-disc pl-4 mb-4"></ul>
+                </tbody>
+            </table>
+            <div class="flex justify-end mt-4">
+                <button id="prev-page" class="bg-blue-500 text-white px-4 py-2 rounded">上一页</button>
+                <button id="next-page" class="bg-blue-500 text-white px-4 py-2 rounded ml-2">下一页</button>
+            </div>
+        </div>
+    </div>
+    <div id="add-group-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 hidden">
+        <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">需要成员加入的群或频道</h2>
+                <button id="close-add-group-modal" class="text-gray-500">&times;</button>
+            </div>
+            <div class="mb-4">
+                <label for="group-info" class="block text-gray-700 font-bold mb-2">群或频道信息</label>
+                <input type="text" id="group-info" class="border border-gray-400 p-2 w-full" placeholder="输入id/用户名/链接">
+            </div>
+            <div class="flex justify-end">
+                <button id="cancel-add-group" class="bg-gray-500 text-white px-4 py-2 rounded">取消</button>
+                <button id="confirm-add-group" class="bg-blue-500 text-white px-4 py-2 rounded ml-2">确定</button>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>    
