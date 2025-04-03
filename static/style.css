@@ -6,6 +6,10 @@ body {
     color: #333;
 }
 
+.hidden {
+    display: none;
+}
+
 /* 模态框样式 */
 .modal {
     display: none;
