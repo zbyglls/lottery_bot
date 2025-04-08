@@ -2,100 +2,40 @@
 body {
     font-family: 'Inter', sans-serif;
     line-height: 1.5;
-    background-color: #f4f4f9; /* 轻微的背景颜色 */
-    color: #333;
-}
-
-.hidden {
-    display: none;
 }
 
 /* 模态框样式 */
 .modal {
     display: none;
-    position: fixed;
+    position: fixed; /* 固定定位 */
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5); /* 半透明背景 */
-    z-index: 1000;
-    opacity: 0;
-    transition: opacity 0.3s ease; /* 淡入淡出过渡效果 */
+    /* background-color: rgba(245, 240, 240, 0); /* 降低背景不透明度 */
+    z-index: 1000; /* 确保模态框在最上层 */
+    background: transport; /* 透明背景 */
 }
 
 .modal.show {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    opacity: 1;
+    display: block;
 }
 
-.modal-content {
-    background-color: #fff;
-    padding: 2rem;
-    border-radius: 0.5rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    max-width: 90%;
-    width: 30rem;
-    transform: scale(0.9);
-    transition: transform 0.3s ease; /* 缩放过渡效果 */
-}
-
-.modal.show .modal-content {
-    transform: scale(1);
-}
-
-/* 按钮样式 */
-button {
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 0.25rem;
-    cursor: pointer;
-    transition: background-color 0.2s ease, opacity 0.2s ease; /* 背景颜色和透明度过渡效果 */
-}
-
+/* 按钮悬停效果 */
 button:hover {
     opacity: 0.8;
-}
-
-button.primary {
-    background-color: #3b82f6;
-    color: #fff;
-}
-
-button.primary:hover {
-    background-color: #2563eb;
-}
-
-button.secondary {
-    background-color: #e5e7eb;
-    color: #374151;
-}
-
-button.secondary:hover {
-    background-color: #d1d5db;
-}
-
-button.danger {
-    background-color: #ef4444;
-    color: #fff;
-}
-
-button.danger:hover {
-    background-color: #dc2626;
+    transition: opacity 0.2s ease;
 }
 
 /* 表格样式 */
 table {
     border-collapse: collapse;
     width: 100%;
-    margin-top: 1rem;
 }
 
 th, td {
     border: 1px solid #e2e8f0;
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 1rem;
     text-align: left;
 }
 
@@ -104,19 +44,14 @@ th {
     font-weight: 600;
 }
 
-tr:hover {
-    background-color: #f3f4f6; /* 行悬停效果 */
-}
-
 /* 表单元素样式 */
 input[type="text"],
 input[type="number"],
 select {
     border: 1px solid #e2e8f0;
     border-radius: 0.25rem;
-    padding: 0.75rem;
+    padding: 0.5rem;
     width: 100%;
-    transition: border-color 0.2s ease; /* 边框颜色过渡效果 */
 }
 
 input[type="text"]:focus,
@@ -136,67 +71,7 @@ select:focus {
     display: block;
 }
 
-.tab-nav {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.tab-nav a {
-    color: #333;
-    text-decoration: none;
-    padding: 0.5rem 1rem;
-    border-bottom: 2px solid transparent;
-    transition: border-bottom-color 0.2s ease; /* 底部边框过渡效果 */
-}
-
-.tab-nav a.active {
-    border-bottom-color: #3b82f6;
-    color: #3b82f6;
-}
-
-.tab-nav a:hover {
-    border-bottom-color: #cbd5e1;
-}
-
 /* 富文本编辑器样式 */
 .ql-container {
     min-height: 10rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.25rem;
-    margin-top: 0.5rem;
-}
-
-.ql-toolbar {
-    border: 1px solid #e2e8f0;
-    border-bottom: none;
-    border-top-left-radius: 0.25rem;
-    border-top-right-radius: 0.25rem;
-    background-color: #f7fafc;
-}
-
-/* 分页按钮样式 */
-.pagination {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 1rem;
-    gap: 0.5rem;
-}
-
-.pagination button {
-    padding: 0.5rem 1rem;
-    background-color: #e5e7eb;
-    color: #374151;
-    border-radius: 0.25rem;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-
-.pagination button:hover {
-    background-color: #d1d5db;
-}
-
-.pagination button.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
+}    
