@@ -40,6 +40,8 @@ def init_db():
                      groups TEXT,
                      draw_method TEXT,
                      participant_count INTEGER,
+                     keyword_group TEXT,  
+                     lottery_keyword TEXT,  
                      created_at DATETIME)''')
         c.execute('''CREATE TABLE IF NOT EXISTS prizes
                      (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,6 +72,19 @@ def index():
     creator_info = "创建人信息示例"
     return render_template('index.html', creator_info=creator_info)
 
+# 模拟关键词群组数据
+keyword_groups = [
+    {'id': 1, 'name': 'Group 1'},
+    {'id': 2, 'name': 'Group 2'}
+    # 可以添加更多群组数据
+]
+
+# 获取关键词群组列表
+@app.route('/get_keyword_groups', methods=['GET'])
+def get_keyword_groups():
+    return jsonify({'groups': keyword_groups})
+
+# 修改 create_lottery 路由函数
 @app.route('/create_lottery', methods=['POST'])
 def create_lottery():
     try:
@@ -82,17 +97,22 @@ def create_lottery():
         join_condition = data.get('join_condition')
         groups = data.get('groups')
         draw_method = data.get('draw_method')
-        participant_count = int(data.get('participant_count'))
+        participant_count = int(data.get('participant_count', 0))  # 处理可能的空值
         created_at = datetime.now()
 
+        # 处理新增的字段
+        keyword_group = data.get('keyword_group') if join_method == 'send_keywords_in_group' else None
+        lottery_keyword = data.get('lottery_keyword') if join_method == 'send_keywords_in_group' else None
+
         with DatabaseConnection('lottery.db') as c:
-            c.execute("INSERT INTO lotteries (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                      (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, created_at))
+            c.execute("INSERT INTO lotteries (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, keyword_group, lottery_keyword, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                      (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, keyword_group, lottery_keyword, created_at))
             lottery_id = c.lastrowid
         return jsonify({'status': 'success', 'lottery_id': lottery_id})
     except Exception as e:
         logger.error(f"创建抽奖活动时出错: {e}")
         return jsonify({'status': 'error', 'message': '创建抽奖活动时出错，请稍后重试'})
+
 
 @app.route('/add_prize', methods=['POST'])
 def add_prize():

@@ -169,6 +169,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // 获取参与方式的单选按钮和相关的容器元素
+    const privateChatRadio = document.getElementById('private-chat');
+    const groupKeywordRadio = document.getElementById('group-keyword');
+    const groupKeywordFields = document.getElementById('group-keyword-fields');
+
+    // 监听参与方式的选择变化
+    function handleJoinMethodChange() {
+        if (privateChatRadio.checked) {
+            groupKeywordFields.classList.add('hidden');
+        } else if (groupKeywordRadio.checked) {
+            groupKeywordFields.classList.remove('hidden');
+            // 加载关键词群组列表
+            loadKeywordGroups();
+        }
+    }
+
+    // 初始化时调用一次，确保初始状态正确
+    handleJoinMethodChange();
+
+    // 为单选按钮添加事件监听器
+    privateChatRadio.addEventListener('change', handleJoinMethodChange);
+    groupKeywordRadio.addEventListener('change', handleJoinMethodChange);
+
+    // 加载关键词群组列表
+    function loadKeywordGroups() {
+        fetch('/get_keyword_groups')
+        .then(response => response.json())
+        .then(data => {
+                const keywordGroupSelect = document.getElementById('keyword-group');
+                keywordGroupSelect.innerHTML = '';
+                data.groups.forEach(group => {
+                    const option = document.createElement('option');
+                    option.value = group.id;
+                    option.textContent = group.name;
+                    keywordGroupSelect.appendChild(option);
+                });
+            });
+    }
+
     // 初始化加载群或频道列表
     loadGroups();
 
@@ -213,6 +252,30 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    // 获取开奖方式的单选按钮和相关的容器元素
+    const fullParticipantsRadio = document.getElementById('full-participants');
+    const timedDrawRadio = document.getElementById('timed-draw');
+    const participantCountContainer = document.getElementById('participant-count-container');
+    const drawDateContainer = document.getElementById('draw-date-container');
+
+    // 监听开奖方式的选择变化
+    function handleDrawMethodChange() {
+        if (fullParticipantsRadio.checked) {
+            participantCountContainer.classList.remove('hidden');
+            drawDateContainer.classList.add('hidden');
+        } else if (timedDrawRadio.checked) {
+            participantCountContainer.classList.add('hidden');
+            drawDateContainer.classList.remove('hidden');
+        }
+    }
+
+    // 初始化时调用一次，确保初始状态正确
+    handleDrawMethodChange();
+
+    // 为单选按钮添加事件监听器
+    fullParticipantsRadio.addEventListener('change', handleDrawMethodChange);
+    timedDrawRadio.addEventListener('change', handleDrawMethodChange);
 
     // 此函数用于加载奖品列表，发送请求到后端获取奖品信息，并将其显示在表格中
     function loadPrizes() {
