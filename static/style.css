@@ -12,13 +12,18 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    /* background-color: rgba(245, 240, 240, 0); /* 降低背景不透明度 */
+    background-color: rgba(0, 0, 0, 0.815); /* 降低背景不透明度 */
     z-index: 1000; /* 确保模态框在最上层 */
-    background: transport; /* 透明背景 */
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
 }
 
 .modal.show {
     display: block;
+}
+
+.modal.fade-in {
+    opacity: 1;
 }
 
 /* 按钮悬停效果 */

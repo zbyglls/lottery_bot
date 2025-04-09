@@ -17,7 +17,6 @@ document.addEventListener('DOMContentLoaded', () => {
             modal.classList.add('fade-in');
         }, 50);
     }
-
     // 通用的关闭模态框函数
     function closeModal(modalId) {
         const modal = document.getElementById(modalId);
@@ -44,6 +43,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('close-add-prize-modal').addEventListener('click', function () {
         closeModal('add-prize-modal');
+    });
+    document.getElementById('cancel-add-prize').addEventListener('click', function () {
+        closeModal('add-prize-modal');
+        document.getElementById('edit-prize-name').value = '';
+        document.getElementById('edit-prize-count').value = '';
     });
     document.getElementById('close-edit-prize-modal').addEventListener('click', function () {
         closeModal('edit-prize-modal');

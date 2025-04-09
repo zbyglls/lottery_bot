@@ -13,7 +13,7 @@
     <script src="static/script.js"></script>
 </head>
 
-<body class="bg-gray-100">
+<body class="bg-gray-100";>
     <div class="container mx-auto p-4">
         <h1 class="text-2xl font-bold mb-4">抽奖设置 - {{ creator_info }}</h1>
         <div class="flex justify-between items-center mb-4">
@@ -63,14 +63,12 @@
                     <label for="group-keyword">群内发送关键词参与抽奖</label>
                 </div>
                 <div id="group-keyword-fields" class="mb-4 hidden">
-                    <!-- 请选关键词群组：标签和选择框放在同一行 -->
                     <div class="flex items-center mb-4">
                         <label for="keyword-group" class="block text-gray-700 font-bold mr-2" style="width: 16.666667%;">请选关键词群组</label>
                         <select id="keyword-group" name="keyword_group" class="border border-gray-400 p-2 ">
                             <!-- 选项将通过 JavaScript 动态添加 -->
                         </select>
                     </div>
-                    <!-- 抽奖关键词：标签和输入框放在同一行 -->
                     <div class="flex items-center mb-4">
                         <label for="lottery-keyword" class="block text-gray-700 font-bold mr-2" style="width: 16.666667%;">抽奖关键词</label>
                         <input type="text" id="lottery-keyword" name="lottery_keyword" class="border border-gray-400 p-2 " placeholder="输入关键词">
@@ -133,7 +131,8 @@
                 </thead>
                 <tbody id="prize-table-body"></tbody>
             </table>
-            <div id="add-prize-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 hidden">
+            <!--
+            <div id="add-prize-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 ">
                 <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold">添加奖品</h2>
@@ -153,7 +152,29 @@
                     </div>
                 </div>
             </div>
-            <div id="edit-prize-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 hidden">
+            -->
+            <div id="add-prize-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 modal">
+                <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">添加奖品</h2>
+                        <button id="close-add-prize-modal" class="text-gray-500">&times;</button>
+                    </div>
+                    <div class="mb-4">
+                        <label for="prize-name" class="block text-gray-700 font-bold mb-2">奖品名称</label>
+                        <input type="text" id="prize-name" class="border border-gray-400 p-2 w-full" placeholder="输入奖品名称">
+                    </div>
+                    <div class="mb-4">
+                        <label for="prize-count" class="block text-gray-700 font-bold mb-2">奖品数量</label>
+                        <input type="number" id="prize-count" class="border border-gray-400 p-2 w-full" placeholder="输入奖品数量">
+                    </div>
+                    <div class="flex justify-end">
+                        <button id="cancel-add-prize" class="bg-gray-500 text-white px-4 py-2 rounded">取消</button>
+                        <button id="confirm-add-prize" class="bg-blue-500 text-white px-4 py-2 rounded ml-2">确定</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="edit-prize-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 modal">
                 <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold">编辑奖品</h2>
@@ -202,7 +223,7 @@
             </div>
         </div>
     </div>
-    <div id="participants-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 hidden">
+    <div id="participants-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 modal">
         <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">已参与用户</h2>
@@ -243,7 +264,7 @@
             </div>
         </div>
     </div>
-    <div id="add-group-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 hidden">
+    <div id="add-group-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 modal">
         <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">需要成员加入的群或频道</h2>
