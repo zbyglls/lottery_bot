@@ -84,7 +84,6 @@ keyword_groups = [
 def get_keyword_groups():
     return jsonify({'groups': keyword_groups})
 
-# 修改 create_lottery 路由函数
 @app.route('/create_lottery', methods=['POST'])
 def create_lottery():
     try:
@@ -97,17 +96,34 @@ def create_lottery():
         join_condition = data.get('join_condition')
         groups = data.get('groups')
         draw_method = data.get('draw_method')
-        participant_count = int(data.get('participant_count', 0))  # 处理可能的空值
+        participant_count = int(data.get('participant_count'))
         created_at = datetime.now()
 
-        # 处理新增的字段
-        keyword_group = data.get('keyword_group') if join_method == 'send_keywords_in_group' else None
-        lottery_keyword = data.get('lottery_keyword') if join_method == 'send_keywords_in_group' else None
-
+        # 插入抽奖活动信息
         with DatabaseConnection('lottery.db') as c:
-            c.execute("INSERT INTO lotteries (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, keyword_group, lottery_keyword, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                      (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, keyword_group, lottery_keyword, created_at))
+            c.execute("INSERT INTO lotteries (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                      (creator_info, title, media_type, description, join_method, join_condition, groups, draw_method, participant_count, created_at))
             lottery_id = c.lastrowid
+
+        # 处理奖品设置信息
+        prize_names = data.getlist('prize_name')
+        prize_counts = data.getlist('prize_count')
+        for name, count in zip(prize_names, prize_counts):
+            if name and count:
+                total_count = int(count)
+                remaining_count = total_count
+                with DatabaseConnection('lottery.db') as c:
+                    c.execute("INSERT INTO prizes (lottery_id, name, total_count, remaining_count) VALUES (?,?,?,?)",
+                              (lottery_id, name, total_count, remaining_count))
+
+        # 处理通知设置信息
+        winner_private_notice = data.get('winner_private_notice')
+        creator_private_notice = data.get('creator_private_notice')
+        group_notice = data.get('group_notice')
+        with DatabaseConnection('lottery.db') as c:
+            c.execute("INSERT INTO notification_settings (lottery_id, winner_private_notice, creator_private_notice, group_notice) VALUES (?,?,?,?)",
+                      (lottery_id, winner_private_notice, creator_private_notice, group_notice))
+
         return jsonify({'status': 'success', 'lottery_id': lottery_id})
     except Exception as e:
         logger.error(f"创建抽奖活动时出错: {e}")

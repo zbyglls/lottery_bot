@@ -77,23 +77,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
     });
-    // 为抽奖表单添加提交事件监听器，提交表单时阻止默认提交行为，将富文本编辑器的内容赋值给隐藏输入框，然后发送请求到后端创建抽奖活动
+
+    // 监听表单提交事件
     document.getElementById('lottery-form').addEventListener('submit', function (e) {
         e.preventDefault();
-        const description = document.getElementById('description');
-        description.value = descriptionEditor.root.innerHTML;
+
         const formData = new FormData(this);
+
+        // 获取奖品信息
+        const prizeTableBody = document.getElementById('prize-table-body');
+        const rows = prizeTableBody.getElementsByTagName('tr');
+        for (let i = 0; i < rows.length; i++) {
+            const cells = rows[i].getElementsByTagName('td');
+            const prizeName = cells[0].textContent;
+            const prizeCount = cells[1].textContent;
+            formData.append('prize_name', prizeName);
+            formData.append('prize_count', prizeCount);
+        }
+
+        // 获取通知设置信息
+        const winnerPrivateNotice = document.getElementById('winner-private-notice').value;
+        const creatorPrivateNotice = document.getElementById('creator-private-notice').value;
+        const groupNotice = document.getElementById('group-notice').value;
+        formData.append('winner_private_notice', winnerPrivateNotice);
+        formData.append('creator_private_notice', creatorPrivateNotice);
+        formData.append('group_notice', groupNotice);
+
+        // 提交表单数据
         fetch('/create_lottery', {
             method: 'POST',
             body: formData
         })
         .then(response => response.json())
         .then(data => {
-                if (data.status === 'success') {
-                    alert('抽奖创建成功');
-                }
-            });
+            if (data.status === 'success') {
+                alert('抽奖活动创建成功！');
+                // 可以在这里添加更多成功后的操作，如刷新页面等
+            } else {
+                alert(data.message);
+            }
+        });
     });
+
     // 为“确认添加奖品”按钮添加点击事件监听器，点击该按钮时收集奖品信息，发送请求到后端添加奖品，添加成功后关闭模态框并重新加载奖品列表
     document.getElementById('confirm-add-prize').addEventListener('click', function () {
         const name = document.getElementById('prize-name').value;
@@ -372,33 +397,6 @@ document.addEventListener('DOMContentLoaded', () => {
     creatorPrivateNoticeEditor.root.innerHTML = defaultCreatorPrivateNotice;
     groupNoticeEditor.root.innerHTML = defaultGroupNotice;
 
-    document.getElementById('save-notification-settings').addEventListener('click', function () {
-        const winnerPrivateNotice = document.getElementById('winner-private-notice');
-        winnerPrivateNotice.value = winnerPrivateNoticeEditor.root.innerHTML;
-        const creatorPrivateNotice = document.getElementById('creator-private-notice');
-        creatorPrivateNotice.value = creatorPrivateNoticeEditor.root.innerHTML;
-        const groupNotice = document.getElementById('group-notice');
-        groupNotice.value = groupNoticeEditor.root.innerHTML;
-
-        const formData = new FormData();
-        formData.append('lottery_id', 1);
-        formData.append('winner_private_notice', winnerPrivateNotice.value);
-        formData.append('creator_private_notice', creatorPrivateNotice.value);
-        formData.append('group_notice', groupNotice.value);
-
-        fetch('/save_notification_settings', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-                if (data.status === 'success') {
-                    alert('通知设置保存成功');
-                } else {
-                    alert('通知设置保存失败');
-                }
-            });
-    });
 
     // 取消按钮功能
     document.getElementById('cancel-add-group').addEventListener('click', function () {
