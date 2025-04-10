@@ -48,7 +48,6 @@ def init_db():
                      lottery_id INTEGER,
                      name TEXT,
                      total_count INTEGER,
-                     remaining_count INTEGER,
                      FOREIGN KEY (lottery_id) REFERENCES lotteries(id))''')
         c.execute('''CREATE TABLE IF NOT EXISTS participants
                      (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,6 +65,9 @@ def init_db():
                      creator_private_notice TEXT,
                      group_notice TEXT,
                      FOREIGN KEY (lottery_id) REFERENCES lotteries(id))''')
+        c.execute('''CREATE TABLE IF NOT EXISTS groups
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     info TEXT)''')
 
 @app.route('/')
 def index():
@@ -86,8 +88,29 @@ def get_keyword_groups():
 
 @app.route('/create_lottery', methods=['POST'])
 def create_lottery():
+    logger.info('进入 create_lottery 函数')
     try:
         data = request.form
+        # 处理参与人数
+        participant_count_str = data.get('participant_count')
+        try:
+            participant_count = int(participant_count_str) if participant_count_str else 1
+        except ValueError:
+            logger.error('参与人数输入不是有效的整数')
+            return jsonify({'status': 'error', 'message': '参与人数输入不是有效的整数'})
+
+        # 处理奖品数量
+        prize_counts = data.getlist('prize_count')
+        valid_prizes = []
+        for count_str in prize_counts:
+            try:
+                count = int(count_str) if count_str else 0
+                valid_prizes.append(count)
+            except ValueError:
+                logger.error('奖品数量输入不是有效的整数')
+                return jsonify({'status': 'error', 'message': '奖品数量输入不是有效的整数'})
+
+        # 其他数据处理逻辑
         creator_info = data.get('creator_info')
         title = data.get('title')
         media_type = data.get('media_type')
@@ -96,7 +119,6 @@ def create_lottery():
         join_condition = data.get('join_condition')
         groups = data.get('groups')
         draw_method = data.get('draw_method')
-        participant_count = int(data.get('participant_count'))
         created_at = datetime.now()
 
         # 插入抽奖活动信息
@@ -111,10 +133,9 @@ def create_lottery():
         for name, count in zip(prize_names, prize_counts):
             if name and count:
                 total_count = int(count)
-                remaining_count = total_count
                 with DatabaseConnection('lottery.db') as c:
-                    c.execute("INSERT INTO prizes (lottery_id, name, total_count, remaining_count) VALUES (?,?,?,?)",
-                              (lottery_id, name, total_count, remaining_count))
+                    c.execute("INSERT INTO prizes (lottery_id, name, total_count) VALUES (?,?,?,?)",
+                              (lottery_id, name, total_count))
 
         # 处理通知设置信息
         winner_private_notice = data.get('winner_private_notice')
@@ -137,11 +158,10 @@ def add_prize():
         lottery_id = int(data.get('lottery_id'))
         name = data.get('name')
         total_count = int(data.get('total_count'))
-        remaining_count = total_count
 
         with DatabaseConnection('lottery.db') as c:
-            c.execute("INSERT INTO prizes (lottery_id, name, total_count, remaining_count) VALUES (?,?,?,?)",
-                      (lottery_id, name, total_count, remaining_count))
+            c.execute("INSERT INTO prizes (lottery_id, name, total_count) VALUES (?,?,?)",
+                      (lottery_id, name, total_count))
         return jsonify({'status': 'success'})
     except Exception as e:
         logger.error(f"添加奖品时出错: {e}")
@@ -186,7 +206,7 @@ def get_prizes():
     try:
         lottery_id = request.args.get('lottery_id')
         with DatabaseConnection('lottery.db') as c:
-            c.execute("SELECT id, name, total_count, remaining_count FROM prizes WHERE lottery_id =?", (lottery_id,))
+            c.execute("SELECT id, name, total_count FROM prizes WHERE lottery_id =?", (lottery_id,))
             prizes = c.fetchall()
 
         result = []
@@ -194,8 +214,7 @@ def get_prizes():
             result.append({
                 'id': prize[0],
                 'name': prize[1],
-                'total_count': prize[2],
-                'remaining_count': prize[3]
+                'total_count': prize[2]
             })
         return jsonify({'prizes': result})
     except Exception as e:
@@ -263,6 +282,23 @@ def cancel_lottery():
     except Exception as e:
         logger.error(f"取消抽奖时出错: {e}")
         return jsonify({'status': 'error', 'message': '取消抽奖时出错，请稍后重试'})
+
+# 保存群信息的路由
+@app.route('/save_group_info', methods=['POST'])
+def save_group_info():
+    try:
+        data = request.form
+        group_info = data.get('group_info')
+
+        # 插入群信息到数据库
+        with DatabaseConnection('lottery.db') as c:
+            c.execute("INSERT INTO groups (info) VALUES (?)", (group_info,))
+
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"保存群信息时出错: {e}")
+        return jsonify({'status': 'error', 'message': '保存群信息时出错，请稍后重试'})
+    
 
 if __name__ == '__main__':
     init_db()

@@ -80,3 +80,9 @@ select:focus {
 .ql-container {
     min-height: 10rem;
 }    
+
+/* 为参与方式单选按钮容器添加样式 */
+.mb-4.flex.items-center .flex.space-x-4 input[type="radio"] + label {
+    margin-left: 0.1px; /* 可以根据需要调整间距大小 */
+    margin-right: 40px; /* 可以根据需要调整间距大小 */
+}

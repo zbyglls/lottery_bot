@@ -1,4 +1,3 @@
-
 // 此函数用于切换显示不同的选项卡
 function showTab(tabId) {
     const tabs = ['basic-info', 'prize-settings', 'notification-settings'];
@@ -35,7 +34,38 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('add-group-btn').addEventListener('click', function () {
         openModal('add-group-modal');
     });
-    document.getElementById('close-add-group-modal').addEventListener('click', function () {
+    document.getElementById('close-add-group-modal').addEventListener('click', function (event) {
+        event.stopPropagation(); // 阻止事件冒泡
+        closeModal('add-group-modal');
+        document.getElementById('group-info').value = '';
+    });
+    document.getElementById('cancel-add-group').addEventListener('click', function (event) {
+        event.stopPropagation(); // 阻止事件冒泡
+        closeModal('add-group-modal');
+        document.getElementById('group-info').value = '';
+    });
+    document.getElementById('confirm-add-group').addEventListener('click', function (event) {
+        event.stopPropagation(); // 阻止事件冒泡
+        // 这里可以添加确认添加群组的逻辑
+        const groupInfo = document.getElementById('group-info').value;
+        if (groupInfo) {
+            // 发送请求到后端保存群信息
+            const formData = new FormData();
+            formData.append('group_info', groupInfo);
+            fetch('/save_group_info', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // 保存成功，重新加载群或频道列表
+                    loadGroups();
+                } else {
+                    alert(data.message);
+                }
+            });
+        }
         closeModal('add-group-modal');
     });
     document.getElementById('add-prize-btn').addEventListener('click', function () {
@@ -58,88 +88,157 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('edit-prize-count').value = '';
     });
 
-    // 为“搜索”按钮添加点击事件监听器，点击该按钮时根据筛选条件获取参与者信息并更新表格
-    document.getElementById('search-btn').addEventListener('click', function () {
-        const status = document.getElementById('status-filter').value;
-        const keyword = document.getElementById('keyword-filter').value;
-        fetch(`/get_participants?lottery_id=1&status=${status}&keyword=${keyword}`)
+    
+
+    // 监听表单提交事件
+    document.getElementById('lottery-form').addEventListener('submit', async function (event) {
+        event.preventDefault(); // 首先阻止表单默认提交
+        if (!validateForm()) {
+            console.log('表单验证失败，终止提交');
+            return false;
+        }
+        // 验证通过后再执行创建抽奖
+        try {
+            const formData = new FormData(this);
+
+            // 同步抽奖文字说明编辑器内容到隐藏输入框
+            const description = descriptionEditor.root.innerHTML;
+            document.getElementById('description').value = description;
+
+            // 获取奖品信息
+            const prizeTableBody = document.getElementById('prize-table-body');
+            const rows = prizeTableBody.getElementsByTagName('tr');
+            for (let i = 0; i < rows.length; i++) {
+                const cells = rows[i].getElementsByTagName('td');
+                const prizeName = cells[0].textContent;
+                const prizeCount = cells[1].textContent;
+                formData.append('prize_name', prizeName);
+                formData.append('prize_count', prizeCount);
+            }
+
+            // 获取通知设置信息
+            const winnerPrivateNotice = document.getElementById('winner-private-notice').value;
+            const creatorPrivateNotice = document.getElementById('creator-private-notice').value;
+            const groupNotice = document.getElementById('group-notice').value;
+            formData.append('winner_private_notice', winnerPrivateNotice);
+            formData.append('creator_private_notice', creatorPrivateNotice);
+            formData.append('group_notice', groupNotice);
+
+            // 提交表单数据
+            const response = await fetch('/create_lottery', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (result.status === 'success') {
+                alert('抽奖创建成功');
+                // window.location.href = '/lottery_list';
+            } else {
+                alert('抽奖创建失败：' + result.message);
+            }
+        } catch (error) {
+            console.error('创建抽奖出错:', error);
+            alert('创建抽奖时发生错误');
+        }
+    });
+
+    // 确认添加奖品
+    document.getElementById('confirm-add-prize').addEventListener('click', function () {
+        if (validateAddPrize()) {
+            const name = document.getElementById('prize-name').value;
+            const totalCount = document.getElementById('prize-count').value;
+            const formData = new FormData();
+            formData.append('lottery_id', 1);
+            formData.append('name', name);
+            formData.append('total_count', totalCount);
+            fetch('/add_prize', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                    if (data.status === 'success') {
+                        closeModal('add-prize-modal');
+                        loadPrizes();
+                    }
+                });
+        }
+    });
+    // 此函数用于加载奖品列表，发送请求到后端获取奖品信息，并将其显示在表格中
+    function loadPrizes() {
+        fetch('/get_prizes?lottery_id=1')
         .then(response => response.json())
         .then(data => {
-                const tableBody = document.getElementById('participants-table-body');
+                const tableBody = document.getElementById('prize-table-body');
                 tableBody.innerHTML = '';
-                data.participants.forEach(participant => {
+                data.prizes.forEach(prize => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td class="px-4 py-2">${participant.nickname}</td>
-                        <td class="px-4 py-2">${participant.user_id}</td>
-                        <td class="px-4 py-2">${participant.username}</td>
-                        <td class="px-4 py-2">${participant.status}</td>
-                        <td class="px-4 py-2">${participant.join_time}</td>
-                        <td class="px-4 py-2">操作</td>
+                        <td class="px-4 py-2">${prize.name}</td>
+                        <td class="px-4 py-2">${prize.total_count}</td>
+                        <td class="px-4 py-2">
+                            <button onclick="editPrize(${prize.id}, '${prize.name}', ${prize.total_count})" class="bg-yellow-500 text-white px-2 py-1 rounded">编辑</button>
+                            <button onclick="deletePrize(${prize.id})" class="bg-red-500 text-white px-2 py-1 rounded">删除</button>
+                        </td>
                     `;
                     tableBody.appendChild(row);
                 });
             });
-    });
+    }
 
-    // 监听表单提交事件
-    document.getElementById('lottery-form').addEventListener('submit', function (e) {
-        e.preventDefault();
-
-        const formData = new FormData(this);
-
-        // 获取奖品信息
-        const prizeTableBody = document.getElementById('prize-table-body');
-        const rows = prizeTableBody.getElementsByTagName('tr');
-        for (let i = 0; i < rows.length; i++) {
-            const cells = rows[i].getElementsByTagName('td');
-            const prizeName = cells[0].textContent;
-            const prizeCount = cells[1].textContent;
-            formData.append('prize_name', prizeName);
-            formData.append('prize_count', prizeCount);
+    // 删除奖品，点击删除按钮时，确认后发送请求到后端删除奖品，删除成功后重新加载奖品列表
+    function deletePrize(prizeId) {
+        if (confirm('是否删除该奖品？')) {
+            const formData = new FormData();
+            formData.append('prize_id', prizeId);
+            fetch('/delete_prize', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                    if (data.status === 'success') {
+                        loadPrizes();
+                    }
+                });
         }
+    }
+    window.deletePrize = deletePrize;
 
-        // 获取通知设置信息
-        const winnerPrivateNotice = document.getElementById('winner-private-notice').value;
-        const creatorPrivateNotice = document.getElementById('creator-private-notice').value;
-        const groupNotice = document.getElementById('group-notice').value;
-        formData.append('winner_private_notice', winnerPrivateNotice);
-        formData.append('creator_private_notice', creatorPrivateNotice);
-        formData.append('group_notice', groupNotice);
-
-        // 提交表单数据
-        fetch('/create_lottery', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                alert('抽奖活动创建成功！');
-                // 可以在这里添加更多成功后的操作，如刷新页面等
-            } else {
-                alert(data.message);
-            }
-        });
-    });
-
-    // 为“确认添加奖品”按钮添加点击事件监听器，点击该按钮时收集奖品信息，发送请求到后端添加奖品，添加成功后关闭模态框并重新加载奖品列表
-    document.getElementById('confirm-add-prize').addEventListener('click', function () {
-        const name = document.getElementById('prize-name').value;
-        const totalCount = document.getElementById('prize-count').value;
+    // 编辑奖品，点击编辑按钮时，将奖品信息填充到编辑模态框中，并打开模态框
+    function editPrize(prizeId, name, totalCount) {
+            document.getElementById('edit-prize-id').value = prizeId;
+            document.getElementById('edit-prize-name').value = name;
+            document.getElementById('edit-prize-count').value = totalCount;
+            openModal('edit-prize-modal');
+        
+    }
+    window.editPrize = editPrize;
+    // 确认编辑奖品”按钮，点击该按钮时收集编辑后的奖品信息，发送请求到后端编辑奖品，编辑成功后关闭模态框并重新加载奖品列表
+    document.getElementById('confirm-edit-prize').addEventListener('click', function () {
+        const prizeId = document.getElementById('edit-prize-id').value;
+        const name = document.getElementById('edit-prize-name').value;
+        const totalCount = document.getElementById('edit-prize-count').value;
+         // 添加验证
+        if (!validatePrize(name, totalCount)) {
+            return;
+        }
         const formData = new FormData();
-        formData.append('lottery_id', 1);
+        formData.append('prize_id', prizeId);
         formData.append('name', name);
         formData.append('total_count', totalCount);
-        fetch('/add_prize', {
+        fetch('/edit_prize', {
             method: 'POST',
             body: formData
         })
         .then(response => response.json())
         .then(data => {
                 if (data.status === 'success') {
-                    closeModal('add-prize-modal');
+                    closeModal('edit-prize-modal');
                     loadPrizes();
+                    alert('奖品编辑成功');
+                } else {
+                    alert('奖品编辑失败');
                 }
             });
     });
@@ -258,16 +357,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="px-4 py-2">${group.username}</td>
                 <td class="px-4 py-2">${group.name}</td>
                 <td class="px-4 py-2">
-                    <button data-group-id="${group.id}" class="bg-red-500 text-white px-2 py-1 rounded">删除</button>
+                    <button data-group-id="${group.id}" class="bg-red-500 text-white px-2 py-1 rounded" type="button">删除</button>
                 </td>
             `;
             tableBody.appendChild(row);
         });
     }
-
     // 事件委托处理删除按钮点击事件
     document.getElementById('group-table-body').addEventListener('click', function (event) {
         if (event.target.tagName === 'BUTTON') {
+            event.stopPropagation(); // 阻止事件冒泡
             const groupId = parseInt(event.target.dataset.groupId);
             if (confirm('是否删除该群或频道？')) {
                 // 模拟从后端删除群或频道数据
@@ -306,81 +405,13 @@ document.addEventListener('DOMContentLoaded', () => {
     fullParticipantsRadio.addEventListener('change', handleDrawMethodChange);
     timedDrawRadio.addEventListener('change', handleDrawMethodChange);
 
-    // 此函数用于加载奖品列表，发送请求到后端获取奖品信息，并将其显示在表格中
-    function loadPrizes() {
-        fetch('/get_prizes?lottery_id=1')
-        .then(response => response.json())
-        .then(data => {
-                const tableBody = document.getElementById('prize-table-body');
-                tableBody.innerHTML = '';
-                data.prizes.forEach(prize => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td class="px-4 py-2">${prize.name}</td>
-                        <td class="px-4 py-2">${prize.total_count}</td>
-                        <td class="px-4 py-2">${prize.remaining_count}</td>
-                        <td class="px-4 py-2">
-                            <button onclick="editPrize(${prize.id}, '${prize.name}', ${prize.total_count})" class="bg-yellow-500 text-white px-2 py-1 rounded">编辑</button>
-                            <button onclick="deletePrize(${prize.id})" class="bg-red-500 text-white px-2 py-1 rounded">删除</button>
-                        </td>
-                    `;
-                    tableBody.appendChild(row);
-                });
-            });
-    }
 
-    // 此函数用于删除奖品，点击删除按钮时，确认后发送请求到后端删除奖品，删除成功后重新加载奖品列表
-    function deletePrize(prizeId) {
-        if (confirm('是否删除该奖品？')) {
-            const formData = new FormData();
-            formData.append('prize_id', prizeId);
-            fetch('/delete_prize', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                    if (data.status === 'success') {
-                        loadPrizes();
-                    }
-                });
-        }
-    }
 
-    // 此函数用于编辑奖品，点击编辑按钮时，将奖品信息填充到编辑模态框中，并打开模态框
-    function editPrize(prizeId, name, totalCount) {
-        document.getElementById('edit-prize-id').value = prizeId;
-        document.getElementById('edit-prize-name').value = name;
-        document.getElementById('edit-prize-count').value = totalCount;
-        openModal('edit-prize-modal');
-    }
-    // 为“确认编辑奖品”按钮添加点击事件监听器，点击该按钮时收集编辑后的奖品信息，发送请求到后端编辑奖品，编辑成功后关闭模态框并重新加载奖品列表
-    document.getElementById('confirm-edit-prize').addEventListener('click', function () {
-        const prizeId = document.getElementById('edit-prize-id').value;
-        const name = document.getElementById('edit-prize-name').value;
-        const totalCount = document.getElementById('edit-prize-count').value;
-        const formData = new FormData();
-        formData.append('prize_id', prizeId);
-        formData.append('name', name);
-        formData.append('total_count', totalCount);
-        fetch('/edit_prize', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-                if (data.status === 'success') {
-                    closeModal('edit-prize-modal');
-                    loadPrizes();
-                    alert('奖品编辑成功');
-                } else {
-                    alert('奖品编辑失败');
-                }
-            });
-    });
 
+
+    // 初始化抽奖文字说明编辑器
     const descriptionEditor = new Quill('#description-editor', {
-        theme: 'snow'
+    theme: 'snow'
     });
     const winnerPrivateNoticeEditor = new Quill('#winner-private-notice-editor', {
         theme: 'snow'
@@ -396,41 +427,65 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaultWinnerPrivateNotice = '{member}，恭喜您，参加抽奖活动{lotteryTitle}中奖了，奖品为{goodsName}，请联系创建人领取奖品。';
     const defaultCreatorPrivateNotice = '您的抽奖{lotteryTitle}（编号{lotterySn}）已成功开奖：\n中奖名单如下：\n{awardUserList}';
     const defaultGroupNotice = '抽奖{lotteryTitle}（编号{lotterySn}）已成功开奖：\n\n已参与人数：{joinNum}\n中奖名单如下：\n{awardUserList}';
-
     winnerPrivateNoticeEditor.root.innerHTML = defaultWinnerPrivateNotice;
     creatorPrivateNoticeEditor.root.innerHTML = defaultCreatorPrivateNotice;
     groupNoticeEditor.root.innerHTML = defaultGroupNotice;
 
 
-    // 取消按钮功能
-    document.getElementById('cancel-add-group').addEventListener('click', function () {
-        closeModal('add-group-modal');
-        document.getElementById('group-info').value = '';
-    });
+    // 每页显示的记录数
+    const itemsPerPage = 10;
+    // 当前页码
+    let currentPage = 1;
+    // 加载参与者信息
+    function loadParticipants(page = 1) {
+        const status = document.getElementById('status-filter').value;
+        const keyword = document.getElementById('keyword-filter').value;
+        fetch(`/get_participants?lottery_id=1&status=${status}&keyword=${keyword}&page=${page}&limit=${itemsPerPage}`)
+          .then(response => response.json())
+          .then(data => {
+                const tableBody = document.getElementById('participants-table-body');
+                tableBody.innerHTML = '';
+                data.participants.forEach(participant => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-4 py-2">${participant.nickname}</td>
+                        <td class="px-4 py-2">${participant.user_id}</td>
+                        <td class="px-4 py-2">${participant.username}</td>
+                        <td class="px-4 py-2">${participant.status}</td>
+                        <td class="px-4 py-2">${participant.join_time}</td>
+                        <td class="px-4 py-2">操作</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
 
-    // 确认按钮功能
-    document.getElementById('confirm-add-group').addEventListener('click', function () {
-        const groupInfo = document.getElementById('group-info').value;
-        if (groupInfo) {
-            // 这里可以添加保存群信息的逻辑
-        }
-    });
-
-    // 渲染当前页的用户列表
-    function renderUsers() {
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        const currentUsers = users.slice(startIndex, endIndex);
-
-        userList.innerHTML = '';
-        currentUsers.forEach(user => {
-            const listItem = document.createElement('li');
-            listItem.textContent = user.name;
-            userList.appendChild(listItem);
-        });
-
-        // 更新按钮状态
-        prevPageButton.disabled = currentPage === 1;
-        nextPageButton.disabled = currentPage === totalPages;
+                // 更新分页按钮
+                updatePagination(data.totalPages, page);
+            });
     }
+    // 更新分页按钮
+    function updatePagination(totalPages, currentPage) {
+        const pagination = document.getElementById('participants-pagination');
+        if (pagination) {
+            pagination.innerHTML = '';
+            for (let i = 1; i <= totalPages; i++) {
+                const button = document.createElement('button');
+                button.textContent = i;
+                button.classList.add('bg-blue-500', 'text-white', 'px-2', 'py-1', 'rounded', 'm-1');
+                if (i === currentPage) {
+                    button.disabled = true;
+                }
+                button.addEventListener('click', () => {
+                    loadParticipants(i);
+                });
+                pagination.appendChild(button);
+            }
+        }
+    }
+    // 为“搜索”按钮添加点击事件监听器，点击该按钮时根据筛选条件获取参与者信息并更新表格
+    document.getElementById('search-btn').addEventListener('click', function () {
+        currentPage = 1;
+        loadParticipants(currentPage);
+    });
+    // 初始化加载参与者信息
+    loadParticipants(currentPage);
 });

@@ -10,7 +10,9 @@
     <link href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" rel="stylesheet">
     <link rel="stylesheet" href="static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
+    <script src="static/validation.js"></script>
     <script src="static/script.js"></script>
+    
 </head>
 
 <body class="bg-gray-100";>
@@ -28,7 +30,7 @@
             </div>
         </div>
         <div id="basic-info" class="block">
-            <form id="lottery-form">
+            <form id="lottery-form" novalidate>
                 <input type="hidden" name="creator_info" value="{{ creator_info }}">
                 <div class="mb-4">
                     <label for="title" class="block text-gray-700 font-bold mb-2">抽奖标题</label>
@@ -57,10 +59,12 @@
                 </div>
                 <div class="mb-4 flex items-center">
                     <label class="text-gray-700 font-bold mr-2">参与方式</label>
-                    <input type="radio" id="private-chat" name="join_method" value="private_chat_bot" checked>
-                    <label for="private-chat">私聊机器人</label>
-                    <input type="radio" id="group-keyword" name="join_method" value="send_keywords_in_group">
-                    <label for="group-keyword">群内发送关键词参与抽奖</label>
+                    <div class="flex items-center space-x-4"> <!-- 添加这个容器并设置间距 -->
+                        <input type="radio" id="private-chat" name="join_method" value="private_chat_bot" checked>
+                        <label for="private-chat">私聊机器人参与抽奖</label>
+                        <input type="radio" id="group-keyword" name="join_method" value="send_keywords_in_group">
+                        <label for="group-keyword">群内发送关键词参与抽奖</label>
+                    </div>
                 </div>
                 <div id="group-keyword-fields" class="mb-4 hidden">
                     <div class="flex items-center mb-4">
@@ -81,7 +85,23 @@
                 </div>
                 <div class="mb-4 flex items-center">
                     <label class="block text-gray-700 font-bold mr-2">需要成员加入的群或频道</label>
-                    <button id="add-group-btn" class="bg-blue-500 text-white px-4 py-2 rounded">添加</button>
+                    <button id="add-group-btn" class="bg-blue-500 text-white px-4 py-2 rounded" type="button">添加</button>
+                </div>
+                <div id="add-group-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 modal">
+                    <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">需要成员加入的群或频道</h2>
+                            <button id="close-add-group-modal" class="text-gray-500" type="button">&times;</button>
+                        </div>
+                        <div class="mb-4">
+                            <label for="group-info" class="block text-gray-700 font-bold mb-2">群或频道信息</label>
+                            <input type="text" id="group-info" class="border border-gray-400 p-2 w-full" placeholder="输入id/用户名/链接">
+                        </div>
+                        <div class="flex justify-end">
+                            <button id="cancel-add-group" class="bg-gray-500 text-white px-4 py-2 rounded" type="button">取消</button>
+                            <button id="confirm-add-group" class="bg-blue-500 text-white px-4 py-2 rounded ml-2" type="button">确定</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="mb-4">
                     <table class="table-auto w-full mt-2">
@@ -98,15 +118,15 @@
                 </div>
                 <div class="mb-4">
                     <label class="block text-gray-700 font-bold mb-2">开奖方式</label>
-                    <input type="radio" id="full-participants" name="draw_method" value="enough_lottery" checked>
+                    <input type="radio" id="full-participants" name="draw_method" value="draw_when_full" checked>
                     <label for="full-participants">满人开奖</label>
-                    <input type="radio" id="timed-draw" name="draw_method" value="timed_lottery">
+                    <input type="radio" id="timed-draw" name="draw_method" value="draw_at_time">
                     <label for="timed-draw">定时开奖</label>
                 </div>
                 <!-- 参与人数输入框（满人开奖时显示） -->
                 <div id="participant-count-container" class="mb-4">
                     <label for="participant-count" class="block text-gray-700 font-bold mb-2">参与人数</label>
-                    <input type="number" id="participant-count" name="participant_count" class="border border-gray-400 p-2 w-full" required>
+                    <input type="number" id="participant-count" name="participant_count" class="border border-gray-400 p-2 w-full" required min="1">
                 </div>
                 <!-- 定时开奖相关的日期选择框（定时开奖时显示） -->
                 <div id="draw-date-container" class="mb-4 hidden">
@@ -125,34 +145,11 @@
                     <tr>
                         <th class="px-4 py-2">奖品名称</th>
                         <th class="px-4 py-2">奖品总数</th>
-                        <th class="px-4 py-2">剩余数量</th>
                         <th class="px-4 py-2">操作</th>
                     </tr>
                 </thead>
                 <tbody id="prize-table-body"></tbody>
             </table>
-            <!--
-            <div id="add-prize-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 ">
-                <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-bold">添加奖品</h2>
-                        <button id="close-add-prize-modal" class="text-gray-500">&times;</button>
-                    </div>
-                    <div class="mb-4">
-                        <label for="prize-name" class="block text-gray-700 font-bold mb-2">奖品名称</label>
-                        <input type="text" id="prize-name" class="border border-gray-400 p-2 w-full" placeholder="输入奖品名称">
-                    </div>
-                    <div class="mb-4">
-                        <label for="prize-count" class="block text-gray-700 font-bold mb-2">奖品数量</label>
-                        <input type="number" id="prize-count" class="border border-gray-400 p-2 w-full" placeholder="输入奖品数量">
-                    </div>
-                    <div class="flex justify-end">
-                        <button id="cancel-add-prize" class="bg-gray-500 text-white px-4 py-2 rounded">取消</button>
-                        <button id="confirm-add-prize" class="bg-blue-500 text-white px-4 py-2 rounded ml-2">确定</button>
-                    </div>
-                </div>
-            </div>
-            -->
             <div id="add-prize-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 modal">
                 <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
                     <div class="flex justify-between items-center mb-4">
@@ -165,20 +162,19 @@
                     </div>
                     <div class="mb-4">
                         <label for="prize-count" class="block text-gray-700 font-bold mb-2">奖品数量</label>
-                        <input type="number" id="prize-count" class="border border-gray-400 p-2 w-full" placeholder="输入奖品数量">
+                        <input type="number" id="prize-count" class="border border-gray-400 p-2 w-full" placeholder="输入奖品数量" min="1">
                     </div>
                     <div class="flex justify-end">
                         <button id="cancel-add-prize" class="bg-gray-500 text-white px-4 py-2 rounded">取消</button>
-                        <button id="confirm-add-prize" class="bg-blue-500 text-white px-4 py-2 rounded ml-2">确定</button>
+                        <button id="confirm-add-prize" class="bg-blue-500 text-white px-4 py-2 rounded ml-2" type="button">确定</button>
                     </div>
                 </div>
             </div>
-
             <div id="edit-prize-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 modal">
                 <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold">编辑奖品</h2>
-                        <button id="close-edit-prize-modal" class="text-gray-500">&times;</button>
+                        <button id="close-edit-prize-modal" class="text-gray-500" >&times;</button>
                     </div>
                     <input type="hidden" id="edit-prize-id">
                     <div class="mb-4">
@@ -261,22 +257,6 @@
                     <button id="prev-page" class="bg-blue-500 text-white px-4 py-2 rounded">上一页</button>
                     <button id="next-page" class="bg-blue-500 text-white px-4 py-2 rounded">下一页</button>
                 </div>
-            </div>
-        </div>
-    </div>
-    <div id="add-group-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 modal">
-        <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold">需要成员加入的群或频道</h2>
-                <button id="close-add-group-modal" class="text-gray-500">&times;</button>
-            </div>
-            <div class="mb-4">
-                <label for="group-info" class="block text-gray-700 font-bold mb-2">群或频道信息</label>
-                <input type="text" id="group-info" class="border border-gray-400 p-2 w-full" placeholder="输入id/用户名/链接">
-            </div>
-            <div class="flex justify-end">
-                <button id="cancel-add-group" class="bg-gray-500 text-white px-4 py-2 rounded">取消</button>
-                <button id="confirm-add-group" class="bg-blue-500 text-white px-4 py-2 rounded ml-2">确定</button>
             </div>
         </div>
     </div>
