@@ -236,7 +236,9 @@
                 <input type="text" id="keyword-filter" class="border border-gray-400 p-2 flex-2" placeholder="用户昵称/用户id">
                 <button id="search-btn" class="bg-blue-500 text-white px-4 py-2 rounded">搜索</button>
             </div>
-            <table class="table-auto w-full">
+            <!-- 在表格上方添加统计容器 -->
+            <div id="participants-stats" class="mb-4"></div>
+            <table class="min-w-full bg-white">
                 <thead>
                     <tr>
                         <th class="px-4 py-2">用户昵称</th>
@@ -262,4 +264,4 @@
     </div>
 </body>
 
-</html>    
+</html>

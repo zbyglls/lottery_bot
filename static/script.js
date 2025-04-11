@@ -1,13 +1,17 @@
-// 此函数用于切换显示不同的选项卡
-function showTab(tabId) {
-    const tabs = ['basic-info', 'prize-settings', 'notification-settings'];
-    tabs.forEach(tab => {
-        document.getElementById(tab).classList.add('hidden');
-    });
-    document.getElementById(tabId).classList.remove('hidden');
-}
+// script.js
+
 // 当文档的 DOM 内容加载完成后执行以下代码
 document.addEventListener('DOMContentLoaded', () => {
+    // 此函数用于切换显示不同的选项卡
+    function showTab(tabId) {
+        const tabs = ['basic-info', 'prize-settings', 'notification-settings'];
+        tabs.forEach(tab => {
+            document.getElementById(tab).classList.add('hidden');
+        });
+        document.getElementById(tabId).classList.remove('hidden');
+    }
+    window.showTab = showTab;
+
     // 通用的打开模态框函数
     function openModal(modalId) {
         const modal = document.getElementById(modalId);
@@ -406,9 +410,6 @@ document.addEventListener('DOMContentLoaded', () => {
     timedDrawRadio.addEventListener('change', handleDrawMethodChange);
 
 
-
-
-
     // 初始化抽奖文字说明编辑器
     const descriptionEditor = new Quill('#description-editor', {
     theme: 'snow'
@@ -441,8 +442,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const status = document.getElementById('status-filter').value;
         const keyword = document.getElementById('keyword-filter').value;
         fetch(`/get_participants?lottery_id=1&status=${status}&keyword=${keyword}&page=${page}&limit=${itemsPerPage}`)
-          .then(response => response.json())
-          .then(data => {
+            .then(response => response.json())
+            .then(data => {
+                // 添加总参与人数显示
+                const statsContainer = document.getElementById('participants-stats');
+                statsContainer.innerHTML = `
+                    <div class="bg-blue-50 p-3 mb-4 rounded-lg shadow-sm">
+                        <p class="text-center text-gray-600">总参与人数</p>
+                        <p class="text-center text-2xl font-bold text-blue-600">${data.totalParticipants}</p>
+                    </div>
+                `;
                 const tableBody = document.getElementById('participants-table-body');
                 tableBody.innerHTML = '';
                 data.participants.forEach(participant => {
@@ -457,8 +466,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     tableBody.appendChild(row);
                 });
-
-                // 更新分页按钮
                 updatePagination(data.totalPages, page);
             });
     }
