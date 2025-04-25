@@ -375,7 +375,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     for gid in group_ids:
                         try:
                             chat = await context.bot.get_chat(gid)
-                            requirements.append(f"❗️ 需要加入：{chat.title}")
+                            chat_link = f"<a href='https://t.me/{chat.username}'>{chat.title}</a>" if chat.username else chat.title
+                            requirements.append(f"❗️ 需要加入：{chat_link}")
                         except Exception as e:
                             logger.error(f"获取群组 {gid} 信息失败: {e}")
                 requirements_text = "\n".join(requirements) if requirements else "无特殊要求"
