@@ -1,3 +1,4 @@
+import aiohttp
 from fastapi import APIRouter, Request, Form, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -568,4 +569,15 @@ async def get_chat_info(query: str):
             'message': '系统错误，请稍后重试'
         })
 
-
+@router.get('/health')
+async def health_check():
+    """健康检查路由"""
+    try:
+        service_url = "https://yangshenbot.onrender.com/"
+        async with aiohttp.ClientSession() as session:
+                async with session.get(service_url) as response:
+                    if response.status == 200:
+                        return JSONResponse({'status': 'ok'})
+    except Exception as e:
+        logger.error(f"健康检查失败: {e}", exc_info=True)
+        return JSONResponse({'status': 'error', 'message': '健康检查失败'})

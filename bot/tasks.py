@@ -150,5 +150,5 @@ async def ping_service():
         except Exception as e:
             logger.error(f"服务唤醒出错: {e}", exc_info=True)
             
-        # 每15分钟唤醒一次
-        await asyncio.sleep(15 * 60)
+        # 每14分钟唤醒一次
+        await asyncio.sleep(14 * 60)
