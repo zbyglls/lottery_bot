@@ -12,26 +12,26 @@
     <script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
     <script src="static/validation.js"></script>
     <script src="static/script.js"></script>
+    <link rel="icon" href="static/favicon.ico" type="image/x-icon">
     
 </head>
 
 <body class="bg-gray-100";>
     <div class="container mx-auto p-4">
-        <h1 class="text-2xl font-bold mb-4">抽奖设置 - {{ creator_info }}</h1>
+        <h1 class="text-2xl font-bold mb-4">抽奖设置 - (创建人：{{ creator_info.nickname }})</h1>
         <div class="flex justify-between items-center mb-4">
             <ul class="flex space-x-4">
                 <li><a href="#" class="text-blue-500 font-bold" onclick="showTab('basic-info')">基础信息</a></li>
                 <li><a href="#" class="text-gray-500" onclick="showTab('prize-settings')">奖品设置</a></li>
-                <li><a href="#" class="text-gray-500" onclick="showTab('notification-settings')">通知设置</a></li>
             </ul>
             <div class="flex space-x-4">
-                <button id="participants-btn" class="bg-blue-500 text-white px-4 py-2 rounded">已参与用户</button>
                 <button id="cancel-lottery-btn" class="bg-red-500 text-white px-4 py-2 rounded">取消抽奖</button>
             </div>
         </div>
         <div id="basic-info" class="block">
-            <form id="lottery-form" novalidate>
-                <input type="hidden" name="creator_info" value="{{ creator_info }}">
+            <form id="lottery-form" method="post" action="/create_lottery" enctype="multipart/form-data" novalidate>
+                <input type="hidden" name="creator_id" value="{{ creator_info.user_id }}">
+                <input type="hidden" name="lottery_id" value="{{ creator_info.lottery_id }}">
                 <div class="mb-4">
                     <label for="title" class="block text-gray-700 font-bold mb-2">抽奖标题</label>
                     <input type="text" id="title" name="title" class="border border-gray-400 p-2 w-full" required>
@@ -67,20 +67,24 @@
                     </div>
                 </div>
                 <div id="group-keyword-fields" class="mb-4 hidden">
-                    <div class="flex items-center mb-4">
-                        <label for="keyword-group" class="block text-gray-700 font-bold mr-2" style="width: 16.666667%;">请选关键词群组</label>
-                        <select id="keyword-group" name="keyword_group" class="border border-gray-400 p-2 ">
-                            <!-- 选项将通过 JavaScript 动态添加 -->
-                        </select>
+                    <div class="flex items-center mb-4 relative"> <!-- 添加 relative 类实现相对定位 -->
+                        <label for="keyword-group-search" class="block text-gray-700 font-bold mr-2" style="width: 16.666667%;">请选关键词群组</label>
+                        <!-- 输入查询框 -->
+                        <div class="search-container">
+                            <input type="text" id="keyword-group-search" placeholder="搜索关键词群组">
+                            <ul id="keyword-group-dropdown">
+                                <!-- 下拉列表项 -->
+                            </ul>
+                        </div>
                     </div>
                     <div class="flex items-center mb-4">
                         <label for="lottery-keyword" class="block text-gray-700 font-bold mr-2" style="width: 16.666667%;">抽奖关键词</label>
-                        <input type="text" id="lottery-keyword" name="lottery_keyword" class="border border-gray-400 p-2 " placeholder="输入关键词">
+                        <input type="text" id="lottery-keyword" name="keyword" class="border border-gray-400 p-2 " placeholder="输入关键词">
                     </div>
                 </div>
                 <div class="mb-4 flex items-center">
                     <label for="join-condition" class="text-gray-700 font-bold mr-2">参与条件</label>
-                    <input type="checkbox" id="username-condition" name="join_condition" value="have_username">
+                    <input type="checkbox" id="username-condition" name="require_username" value="1">
                     <label for="username-condition" class="ml-1">必须有用户名</label>
                 </div>
                 <div class="mb-4 flex items-center">
@@ -131,10 +135,10 @@
                 <!-- 定时开奖相关的日期选择框（定时开奖时显示） -->
                 <div id="draw-date-container" class="mb-4 hidden">
                     <label for="draw-date" class="block text-gray-700 font-bold mb-2">开奖日期</label>
-                    <input type="datetime-local" id="draw-date" name="draw_date" class="border border-gray-400 p-2 w-full" placeholder="选择日期">
+                    <input type="datetime-local" id="draw-date" name="draw_time" class="border border-gray-400 p-2 w-full" placeholder="选择日期">
                 </div>
                 <div class="flex justify-center">
-                    <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded">提交</button>
+                    <button id="submit-lottery-btn" type="submit" class="bg-green-500 text-white px-4 py-2 rounded">提交</button>
                 </div>
             </form>
         </div>
@@ -176,7 +180,7 @@
                         <h2 class="text-xl font-bold">编辑奖品</h2>
                         <button id="close-edit-prize-modal" class="text-gray-500" >&times;</button>
                     </div>
-                    <input type="hidden" id="edit-prize-id">
+                    <input type="hidden" id="edit-prize-index">
                     <div class="mb-4">
                         <label for="edit-prize-name" class="block text-gray-700 font-bold mb-2">奖品名称</label>
                         <input type="text" id="edit-prize-name" class="border border-gray-400 p-2 w-full" placeholder="输入奖品名称">
@@ -189,75 +193,6 @@
                         <button id="cancel-edit-prize" class="bg-gray-500 text-white px-4 py-2 rounded">取消</button>
                         <button id="confirm-edit-prize" class="bg-blue-500 text-white px-4 py-2 rounded ml-2">确定</button>
                     </div>
-                </div>
-            </div>
-        </div>
-        <div id="notification-settings" class="hidden">
-            <div class="mb-4">
-                <label for="winner-private-notice" class="block text-gray-700 font-bold mb-2">中奖私聊中奖人通知</label>
-                <div id="winner-private-notice-editor" class="border border-gray-400 p-2 w-full h-40"></div>
-                <input type="hidden" id="winner-private-notice" name="winner_private_notice">
-                <p class="text-gray-500">
-                    {member}表示中奖用户，{lotteryTitle}表示活动标题，{goodsName}表示奖品名称，{creator}表示创建人，{creatorId}表示创建人ID，{creatorName}表示创建人昵称
-                </p>
-            </div>
-            <div class="mb-4">
-                <label for="creator-private-notice" class="block text-gray-700 font-bold mb-2">中奖私聊创建人通知</label>
-                <div id="creator-private-notice-editor" class="border border-gray-400 p-2 w-full h-40"></div>
-                <input type="hidden" id="creator-private-notice" name="creator_private_notice">
-                <p class="text-gray-500">
-                    {lotteryTitle}表示活动标题，{lotterySn}表示抽奖编号，{awardUserList}表示中奖名单
-                </p>
-            </div>
-            <div class="mb-4">
-                <label for="group-notice" class="block text-gray-700 font-bold mb-2">中奖发送到群/频道通知</label>
-                <div id="group-notice-editor" class="border border-gray-400 p-2 w-full h-40"></div>
-                <input type="hidden" id="group-notice" name="group_notice">
-                <p class="text-gray-500">
-                    {lotteryTitle}表示活动标题，{lotterySn}表示抽奖编号，{creator}表示创建人，{creatorId}表示创建人ID，{creatorName}表示创建人昵称，{joinNum}表示已参与人数，{awardUserList}表示中奖名单
-                </p>
-            </div>
-        </div>
-    </div>
-    <div id="participants-modal" class="fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-50 modal">
-        <div class="bg-white p-4 rounded-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold">已参与用户</h2>
-                <button id="close-participants-modal" class="text-gray-500">&times;</button>
-            </div>
-            <div class="flex space-x-4 mb-4">
-                <select id="status-filter" class="border border-gray-400 p-2 flex-1">
-                    <option value="all_user">全部用户</option>
-                    <option value="Winning_user">已中奖用户</option>
-                    <option value="banned_user">已禁止抽奖</option>
-                    <option value="cancelled_user">已取消奖品</option>
-                    <option value="rece_user">已领取奖品</option>
-                </select>
-                <input type="text" id="keyword-filter" class="border border-gray-400 p-2 flex-2" placeholder="用户昵称/用户id">
-                <button id="search-btn" class="bg-blue-500 text-white px-4 py-2 rounded">搜索</button>
-            </div>
-            <!-- 在表格上方添加统计容器 -->
-            <div id="participants-stats" class="mb-4"></div>
-            <table class="min-w-full bg-white">
-                <thead>
-                    <tr>
-                        <th class="px-4 py-2">用户昵称</th>
-                        <th class="px-4 py-2">用户ID</th>
-                        <th class="px-4 py-2">用户名</th>
-                        <th class="px-4 py-2">用户状态</th>
-                        <th class="px-4 py-2">参与时间</th>
-                        <th class="px-4 py-2">操作</th>
-                    </tr>
-                </thead>
-                <tbody id="participants-table-body">
-                    <ul id="user-list" class="list-disc pl-4 mb-4"></ul>
-                </tbody>
-            </table>
-            <div class="flex justify-between items-center mt-4">
-                <div id="pagination-info" class="text-gray-700"></div>
-                <div class="flex space-x-2">
-                    <button id="prev-page" class="bg-blue-500 text-white px-4 py-2 rounded">上一页</button>
-                    <button id="next-page" class="bg-blue-500 text-white px-4 py-2 rounded">下一页</button>
                 </div>
             </div>
         </div>

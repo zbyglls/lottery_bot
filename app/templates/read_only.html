@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抽奖详情</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link rel="icon" href="static/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="static/ro_style.css">
+    <script src="static/ro_script.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-bold">抽奖详情</h1>
+            <div class="space-x-4">
+                <button id="participants-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                    已参与用户
+                </button>
+                <button id="cancel-btn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">
+                    取消抽奖
+                </button>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <!-- 基本信息 -->
+            <div class="mb-6">
+                <h2 class="text-xl font-bold mb-4">基本信息</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2">抽奖标题</label>
+                        <input type="text" value="{{ lottery_info.title }}" class="w-full p-2 border rounded" readonly>
+                        <input type="hidden" id="lottery_id" name="lottery_id" value="{{ lottery_info.lottery_id }}">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-gray-700 mb-2">抽奖描述</label>
+                        <textarea class="w-full p-2 border rounded" rows="3" readonly>{{ lottery_info.description }}</textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2">参与方式</label>
+                        <div class="whitespace-pre-wrap p-4 bg-gray-50 rounded border">{{ lottery_info.join_method }}</div>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">开奖时间</label>
+                        <input type="text" value="{{ lottery_info.draw_time }}" class="w-full p-2 border rounded" readonly>
+                    </div>
+                </div>
+            </div>
+            <!-- 奖品信息 -->
+            <div class="mb-6">
+                <h2 class="text-xl font-bold mb-4">奖品信息</h2>
+                <div class="space-y-2">
+                    {% for prize in lottery_info.prizes %}
+                    <div class="flex items-center space-x-4">
+                        <input type="text" value="{{ prize.name }}" class="flex-1 p-2 border rounded" readonly>
+                        <input type="number" value="{{ prize.count }}" class="w-24 p-2 border rounded" readonly>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- 参与统计 -->
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-700">当前参与人数：{{ lottery_info.current_participants }}</span>
+                    <span class="text-gray-700">状态：{{ lottery_info.status }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- 参与者模态框 -->
+    <div id="participants-modal" class="modal">
+        <div class="bg-white w-3/4 max-w-4xl mx-auto mt-20 rounded-lg shadow-lg">
+            <div class="p-4 border-b">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-bold">参与者列表</h3>
+                    <button id="close-modal" class="text-gray-500 hover:text-gray-700">&times;</button>
+                </div>
+            </div>
+            <div class="p-4">
+                <div class="mb-4 flex space-x-4">
+                    <input type="text" id="search-input" placeholder="用户昵称/用户id" class="flex-1 p-2 border rounded">
+                    <button id="search-btn" class="bg-blue-500 text-white px-4 py-2 rounded">搜索</button>
+                </div>
+                <!-- 添加统计信息容器 -->
+                <div id="participants-stats" class="mb-4"></div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th class="px-4 py-2 text-left">用户昵称</th>
+                                <th class="px-4 py-2 text-left">用户名</th>
+                                <th class="px-4 py-2 text-left">用户ID</th>
+                                <th class="px-4 py-2 text-left">参与时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="participants-list"></tbody>
+                    </table>
+                    <div class="flex justify-between items-center mt-4">
+                        <div id="pagination-info" class="text-gray-700"></div>
+                        <div class="flex space-x-2">
+                            <button id="prev-page" class="bg-blue-500 text-white px-4 py-2 rounded">上一页</button>
+                            <button id="next-page" class="bg-blue-500 text-white px-4 py-2 rounded">下一页</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

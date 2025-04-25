@@ -28,6 +28,18 @@ function validateForm(event) {
         }
         return false;
     }
+    // 增加对链接格式的验证
+    if ((mediaType === 'image' || mediaType === 'video') && link) {
+        const urlRegex = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/;
+        if (!urlRegex.test(link)) {
+            alert('请输入有效的图片或视频链接！');
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            return false;
+        }
+    }
 
     // 抽奖文字说明验证
     const descriptionEditor = new Quill('#description-editor');
@@ -44,7 +56,7 @@ function validateForm(event) {
     // 请选关键词群组选择框验证
     const joinMethod = document.querySelector('input[name="join_method"]:checked').value;
     if (joinMethod === 'send_keywords_in_group') {
-        const keywordGroup = document.getElementById('keyword-group').value;
+        const keywordGroup = document.getElementById('keyword-group-search').value;
         if (!keywordGroup) {
             alert('请选择关键词群组！');
             if (event) {
@@ -64,17 +76,18 @@ function validateForm(event) {
             return false;
         }
     }
-
-    // 需要成员加入的群或频道列表验证
-    const groupTableBody = document.getElementById('group-table-body');
-    const groupRows = groupTableBody.getElementsByTagName('tr');
-    if (groupRows.length === 0) {
-        alert('请添加需要成员加入的群或频道！');
-        if (event) {
-            event.preventDefault();
-            event.stopPropagation(); // 阻止事件冒泡
+    if (joinMethod === 'private_chat_bot') {
+        // 需要成员加入的群或频道列表验证
+        const groupTableBody = document.getElementById('group-table-body');
+        const groupRows = groupTableBody.getElementsByTagName('tr');
+        if (groupRows.length === 0) {
+            alert('请添加需要成员加入的群或频道！');
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation(); // 阻止事件冒泡
+            }
+            return false;
         }
-        return false;
     }
 
     // 根据开奖方式进行验证
@@ -124,16 +137,6 @@ function validateForm(event) {
         }
         return false;
     }
-
-    // 验证通知设置
-    if (!validateNotifications()) {
-        if (event) {
-            event.preventDefault();
-            event.stopPropagation();
-        }
-        return false;
-    }
-
     return true;
 }
 
@@ -193,34 +196,6 @@ function validatePrize(name, count, originalName) {
     // 验证奖品数量
     if (!count || isNaN(count) || parseInt(count) <= 0) {
         alert('奖品数量必须大于0！');
-        return false;
-    }
-
-    return true;
-}
-
-// 添加验证通知内容的函数
-function validateNotifications() {
-    // 获取通知内容
-    const winnerPrivateNotice = document.getElementById('winner-private-notice-editor').querySelector('.ql-editor').innerHTML;
-    const creatorPrivateNotice = document.getElementById('creator-private-notice-editor').querySelector('.ql-editor').innerHTML;
-    const groupChannelNotice = document.getElementById('group-channel-notice-editor').querySelector('.ql-editor').innerHTML;
-
-    // 中奖私聊中奖人通知验证
-    if (!winnerPrivateNotice || winnerPrivateNotice === '<p><br></p>') {
-        alert('请输入中奖私聊中奖人通知内容！');
-        return false;
-    }
-
-    // 中奖私聊创建人通知验证
-    if (!creatorPrivateNotice || creatorPrivateNotice === '<p><br></p>') {
-        alert('请输入中奖私聊创建人通知内容！');
-        return false;
-    }
-
-    // 中奖发送到群/频道通知验证
-    if (!groupChannelNotice || groupChannelNotice === '<p><br></p>') {
-        alert('请输入中奖发送到群/频道通知内容！');
         return false;
     }
 
