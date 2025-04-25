@@ -1,5 +1,0 @@
-# 忽略日志文件
-*.log
-
-.env
-.gitignore
