@@ -5,9 +5,9 @@ from fastapi.staticfiles import StaticFiles
 from app.routes import router as api_router
 from config import BASE_DIR, templates
 from app.database import check_db
-from bot import create_bot, stop_bot
+from bot import create_bot, start_background_tasks, stop_bot
 from utils import logger
-from bot.tasks import check_lottery_draws
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
         await create_bot()
         
         # 启动开奖监听任务
-        app.state.lottery_task = asyncio.create_task(check_lottery_draws())
+        app.state.lottery_task = asyncio.create_task(start_background_tasks())
         
         logger.info("应用初始化完成")
         yield

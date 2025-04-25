@@ -1,9 +1,11 @@
 from telegram.ext import Application, CallbackQueryHandler
+from bot.tasks import check_lottery_draws, ping_service
 from config import TELEGRAM_BOT_TOKEN
 from utils import logger, reset_initialization
 from bot.bot_instance import set_application, get_bot
 from bot.commands import register_commands
 from bot.callbacks import handle_callback_query
+import asyncio
 
 async def create_bot():
     """创建并初始化bot"""
@@ -67,6 +69,21 @@ async def stop_bot():
             logger.info("机器人已停止")
         except Exception as e:
             logger.error(f"停止机器人时出错: {e}", exc_info=True)
+
+async def start_background_tasks():
+    """启动后台任务"""
+    try:
+        # 创建任务组
+        tasks = [
+            asyncio.create_task(check_lottery_draws()),
+            asyncio.create_task(ping_service())  # 添加唤醒服务任务
+        ]
+        
+        # 等待所有任务
+        await asyncio.gather(*tasks)
+        
+    except Exception as e:
+        logger.error(f"启动后台任务时出错: {e}", exc_info=True)
 
 # 定义导出的函数
 __all__ = [

@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime, timedelta
+import aiohttp
 from utils import logger
 from bot.bot_instance import get_bot
 from bot.lottery import draw_lottery
@@ -131,3 +132,23 @@ async def cleanup_old_lotteries():
                     
     except Exception as e:
         logger.error(f"清理过期抽奖记录时出错: {e}", exc_info=True)
+
+async def ping_service():
+    """定时唤醒服务"""
+    while True:
+        try:
+            # 构造请求 URL
+            service_url = "https://yangshenbot.onrender.com/"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(service_url) as response:
+                    if response.status == 200:
+                        logger.info("服务唤醒成功")
+                    else:
+                        logger.warning(f"服务唤醒失败: {response.status}")
+                        
+        except Exception as e:
+            logger.error(f"服务唤醒出错: {e}", exc_info=True)
+            
+        # 每15分钟唤醒一次
+        await asyncio.sleep(15 * 60)
