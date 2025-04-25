@@ -151,7 +151,7 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message += f"🎲 {title}\n"
             message += f"状态: {status}\n"
             message += f"创建时间: {created_at}\n"
-            message += f"管理链接: http://{YOUR_DOMAIN}/?lottery_id={lottery_id}&user_id={user.id}\n\n"
+            message += f"管理链接: {YOUR_DOMAIN}/?lottery_id={lottery_id}&user_id={user.id}\n\n"
 
         await update.message.reply_text(message)
     except Exception as e:
