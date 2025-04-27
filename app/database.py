@@ -1,28 +1,46 @@
-import sqlite3
+import psycopg2
+from psycopg2 import pool
 from utils import mark_initialized, logger
-from config import DB_PATH
+from config import DB_CONFIG
 
 class DatabaseConnection:
-    """数据库连接上下文管理器"""
+    """PostgreSQL 数据库连接池管理器"""
+    _pool = None
+
+    @classmethod
+    def init_pool(cls):
+        """初始化连接池"""
+        if not cls._pool:
+            try:
+                cls._pool = pool.SimpleConnectionPool(
+                    minconn=1,
+                    maxconn=10,
+                    **DB_CONFIG
+                )
+                logger.info("数据库连接池初始化成功")
+            except Exception as e:
+                logger.error(f"数据库连接池初始化失败: {e}", exc_info=True)
+                raise
     
-    def __init__(self, db_path=None):
+    def __init__(self):
         """初始化数据库连接"""
-        self.db_path = db_path or DB_PATH
         self.conn = None
         self.cursor = None
 
     def __enter__(self):
-        """进入上下文时建立连接"""
+        """进入上下文时获取连接"""
+        if not self._pool:
+            self.init_pool()
         try:
-            self.conn = sqlite3.connect(self.db_path)
+            self.conn = self._pool.getconn()
             self.cursor = self.conn.cursor()
             return self.cursor
-        except sqlite3.Error as e:
+        except Exception as e:
             logger.error(f"数据库连接失败: {e}", exc_info=True)
             raise
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """退出上下文时提交或回滚并关闭连接"""
+        """退出上下文时释放连接"""
         try:
             if exc_type is None:
                 self.conn.commit()
@@ -32,7 +50,7 @@ class DatabaseConnection:
             if self.cursor:
                 self.cursor.close()
             if self.conn:
-                self.conn.close()
+                self._pool.putconn(self.conn)
 
 def init_db():
     """初始化数据库表结构"""
@@ -50,69 +68,67 @@ def init_db():
                      type TEXT NOT NULL,  -- 'normal' 或 'invite'
                      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        # 抽奖设置表
+        # 抽奖设置表 - 使用 PostgreSQL 特性
         c.execute('''CREATE TABLE IF NOT EXISTS lottery_settings
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     lottery_id INTEGER,
+                     (id SERIAL PRIMARY KEY,
+                     lottery_id INTEGER REFERENCES lotteries(id) ON DELETE CASCADE,
                      title TEXT NOT NULL,
-                     media_type TEXT DEFAULT NULL,     -- 图片或视频类型，'image' 或 'video'
-                     media_url TEXT,             -- 图片或视频链接字段
+                     media_type TEXT,
+                     media_url TEXT,
                      description TEXT NOT NULL,
-                     join_method TEXT NOT NULL,  -- 'private_chat' 或 'group_keyword'
+                     join_method TEXT NOT NULL,
                      keyword_group_id TEXT,
                      keyword TEXT,
-                     require_username BOOLEAN DEFAULT 0,
-                     required_groups TEXT,        -- 需要加入的群组/频道ID，多个用逗号分隔
-                     draw_method TEXT NOT NULL,  -- 'draw_when_full' 或 'draw_at_time'
+                     require_username BOOLEAN DEFAULT FALSE,
+                     required_groups TEXT,
+                     draw_method TEXT NOT NULL,
                      participant_count INTEGER DEFAULT 1,
-                     draw_time TIMESTAMP,
-                     FOREIGN KEY (lottery_id) REFERENCES lotteries(id) ON DELETE CASCADE
-                     ) ''')
+                     draw_time TIMESTAMP)''')
         # 奖品表
         c.execute('''CREATE TABLE IF NOT EXISTS prizes
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     lottery_id INTEGER NOT NULL,
-                     name TEXT NOT NULL,          -- 奖品名称
-                     total_count INTEGER NOT NULL, -- 奖品总数量
-                     FOREIGN KEY (lottery_id) REFERENCES lotteries(id) ON DELETE CASCADE
-                     )''')
+                     (id SERIAL PRIMARY KEY,
+                     lottery_id INTEGER REFERENCES lotteries(id) ON DELETE CASCADE,
+                     name TEXT NOT NULL,          
+                     total_count INTEGER NOT NULL)''')
         # 创建中奖记录表
         c.execute('''CREATE TABLE IF NOT EXISTS prize_winners
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     prize_id INTEGER NOT NULL,
-                     participant_id INTEGER NOT NULL,
-                     lottery_id INTEGER NOT NULL,
+                     (id SERIAL PRIMARY KEY,
+                     prize_id INTEGER REFERENCES prizes(id)  ON DELETE CASCADE,
+                     participant_id INTEGER REFERENCES participants(id) ON DELETE CASCADE,
+                     lottery_id INTEGER REFERENCES lotteries(id) ON DELETE CASCADE,
                      win_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                     status TEXT DEFAULT 'pending',  -- pending, claimed, expired
-                     FOREIGN KEY (prize_id) REFERENCES prizes(id)  ON DELETE CASCADE,
-                     FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE,
-                     FOREIGN KEY (lottery_id) REFERENCES lotteries(id) ON DELETE CASCADE
-                     )''')
+                     status TEXT DEFAULT 'pending',  -- pending, claimed, expired)''')
         
         # 参与者表
         c.execute('''CREATE TABLE IF NOT EXISTS participants
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     lottery_id INTEGER,
+                     (id SERIAL PRIMARY KEY,
+                     lottery_id INTEGER REFERENCES lotteries(id) ON DELETE CASCADE,
                      nickname TEXT,
                      user_id TEXT,
                      username TEXT,
                      status TEXT,
-                     join_time DATETIME,
-                     FOREIGN KEY (lottery_id) REFERENCES lotteries(id) ON DELETE CASCADE
-                     )''')
-        # 创建索引
-        c.execute('CREATE INDEX IF NOT EXISTS idx_lotteries_creator ON lotteries(creator_id)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_lotteries_status ON lotteries(status)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_participants_lottery ON participants(lottery_id)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_participants_user ON participants(user_id)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_prize_winners_lottery ON prize_winners(lottery_id)')
+                     join_time DATETIME)''')
+        
+        # 创建触发器 - PostgreSQL 语法
+        c.execute('''CREATE OR REPLACE FUNCTION update_updated_at()
+                    RETURNS TRIGGER AS $$
+                    BEGIN
+                        NEW.updated_at = CURRENT_TIMESTAMP;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql;''')
 
-        #创建触发器自动更新时间
-        c.execute('''CREATE TRIGGER IF NOT EXISTS update_lottery_timestamp
-                     AFTER UPDATE ON lotteries
-                     BEGIN
-                        UPDATE lotteries SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-                     END;''')
+        c.execute('''DROP TRIGGER IF EXISTS update_lottery_timestamp ON lotteries;''')
+        c.execute('''CREATE TRIGGER update_lottery_timestamp
+                    BEFORE UPDATE ON lotteries
+                    FOR EACH ROW
+                    EXECUTE FUNCTION update_updated_at();''')
+        # 创建索引
+        c.execute('CREATE INDEX IF NOT EXISTS idx_lotteries_creator ON lotteries(creator_id);')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_lotteries_status ON lotteries(status);')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_participants_lottery ON participants(lottery_id);')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_participants_user ON participants(user_id);')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_prize_winners_lottery ON prize_winners(lottery_id);')
 
         logger.info("数据库表结构初始化完成")
 
@@ -136,6 +152,6 @@ def check_db():
             else:
                 logger.info("数据库表结构完整，无需初始化")
                 
-        except sqlite3.Error as e:
+        except Exception as e:
             logger.error(f"检查数据库时出错: {e}", exc_info=True)
             raise

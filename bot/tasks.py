@@ -34,7 +34,7 @@ async def check_lottery_draws():
                     JOIN lottery_settings ls ON l.id = ls.lottery_id
                     WHERE l.status = 'active' 
                     AND ls.draw_method = 'draw_time'
-                    AND ls.draw_time <= ?
+                    AND ls.draw_time <= %s
                 """, (current_time,))
                 time_draws = c.fetchall()
 
@@ -95,39 +95,32 @@ async def cleanup_old_lotteries():
                 FROM lotteries l
                 JOIN lottery_settings ls ON l.id = ls.lottery_id
                 WHERE l.status IN ('completed', 'cancelled')
-                AND l.updated_at <= ?
+                AND l.updated_at <= %s
             """, (one_day_ago,))
             
             old_lotteries = c.fetchall()
             
             for lottery_id, title, status in old_lotteries:
                 try:
-                    # 开启事务
-                    c.execute("BEGIN TRANSACTION")
-                    
                     # 按顺序删除相关记录
                     # 1. 删除中奖记录
-                    c.execute("DELETE FROM prize_winners WHERE lottery_id = ?", (lottery_id,))
+                    c.execute("DELETE FROM prize_winners WHERE lottery_id = %s", (lottery_id,))
                     
                     # 2. 删除参与者记录
-                    c.execute("DELETE FROM participants WHERE lottery_id = ?", (lottery_id,))
+                    c.execute("DELETE FROM participants WHERE lottery_id = %s", (lottery_id,))
                     
                     # 3. 删除奖品记录
-                    c.execute("DELETE FROM prizes WHERE lottery_id = ?", (lottery_id,))
+                    c.execute("DELETE FROM prizes WHERE lottery_id = %s", (lottery_id,))
                     
                     # 4. 删除抽奖设置
-                    c.execute("DELETE FROM lottery_settings WHERE lottery_id = ?", (lottery_id,))
+                    c.execute("DELETE FROM lottery_settings WHERE lottery_id = %s", (lottery_id,))
                     
                     # 5. 最后删除抽奖主记录
-                    c.execute("DELETE FROM lotteries WHERE id = ?", (lottery_id,))
+                    c.execute("DELETE FROM lotteries WHERE id = %s", (lottery_id,))
                     
-                    # 提交事务
-                    c.execute("COMMIT")
                     logger.info(f"已清理抽奖记录: {title} (ID: {lottery_id}, 状态: {status})")
                     
                 except Exception as e:
-                    # 回滚事务
-                    c.execute("ROLLBACK")
                     logger.error(f"清理抽奖 {title} (ID: {lottery_id}) 时出错: {e}", exc_info=True)
                     
     except Exception as e:

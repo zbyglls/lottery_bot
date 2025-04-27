@@ -49,7 +49,7 @@ async def get_lottery_info(lottery_id):
                     l.created_at
                 FROM lottery_settings ls
                 JOIN lotteries l ON l.id = ls.lottery_id
-                WHERE ls.lottery_id = ?
+                WHERE ls.lottery_id = %s
             """, (lottery_id,))
             settings = c.fetchone()
             if not settings:
@@ -65,7 +65,7 @@ async def get_lottery_info(lottery_id):
                 c.execute("""
                     SELECT name, total_count
                     FROM prizes
-                    WHERE lottery_id = ?
+                    WHERE lottery_id = %s
                 """, (lottery_id,))
                 prizes = c.fetchall()
 
@@ -73,7 +73,7 @@ async def get_lottery_info(lottery_id):
                 c.execute("""
                     SELECT COUNT(*)
                     FROM participants
-                    WHERE lottery_id = ?
+                    WHERE lottery_id = %s
                 """, (lottery_id,))
                 participant_count = c.fetchone()[0]
                 group_titles = []
@@ -294,9 +294,10 @@ async def create_lottery(
 
         # 3. 创建抽奖活动
         with DatabaseConnection() as c:
+            # 检查抽奖记录是否存在
             c.execute("""
-                SELECT * FROM lotteries WHERE id = ?
-                """, (lottery_id,))
+                SELECT * FROM lotteries WHERE id = %s
+            """, (lottery_id,))
             result = c.fetchone()
             if not result:
                 return templates.TemplateResponse(
@@ -310,9 +311,9 @@ async def create_lottery(
             # 3.1 修改抽奖记录状态
             c.execute("""
                 UPDATE lotteries
-                SET status = ?, updated_at =?
-                WHERE id =? AND creator_id =?
-            """, ('active', datetime.now(), lottery_id, creator_id))
+                SET status = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s AND creator_id = %s
+            """, ('active', lottery_id, creator_id))
 
             # 3.2 创建抽奖设置记录
             c.execute("""
@@ -330,7 +331,7 @@ async def create_lottery(
                     draw_method,
                     participant_count,
                     draw_time
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 lottery_id, 
                 title, 
@@ -340,8 +341,8 @@ async def create_lottery(
                 join_method,
                 keyword_group_id,
                 keyword,
-                1 if require_username_bool else 0,  # 将布尔值转换为整数
-                required_groups_str,                 # 将群组ID列表转换为字符串
+                require_username_bool,  # PostgreSQL 原生支持布尔类型
+                required_groups_str,
                 draw_method,
                 participant_count,
                 draw_time
@@ -361,7 +362,7 @@ async def create_lottery(
                                 lottery_id,
                                 name,
                                 total_count
-                            ) VALUES (?, ?, ?)
+                            ) VALUES (%s, %s, %s)
                         """, (lottery_id, name, count))
                     except ValueError as e:
                         logger.error(f'无效的奖品数量: {e}')
@@ -414,16 +415,16 @@ async def get_participants(
     keyword: Optional[str] = None
 ):
     try:
-        query = "SELECT nickname, user_id, username, status, join_time FROM participants WHERE lottery_id =? "
+        query = "SELECT nickname, user_id, username, status, join_time FROM participants WHERE lottery_id =%s "
         params = [lottery_id]
         if status and status != '全部用户':
-            query += "AND status =? "
+            query += "AND status =%s "
             params.append(status)
         if keyword:
-            query += "AND (nickname LIKE? OR user_id LIKE?)"
+            query += "AND (nickname LIKE %s OR user_id LIKE %s)"
             params.extend([f'%{keyword}%', f'%{keyword}%'])
 
-        with DatabaseConnection('lottery.db') as c:
+        with DatabaseConnection() as c:
             c.execute(query, params)
             participants = c.fetchall()
 
@@ -447,8 +448,8 @@ async def get_prizes(
     lottery_id: str
 ):
     try:
-        with DatabaseConnection('lottery.db') as c:
-            c.execute("SELECT id, name, total_count FROM prizes WHERE lottery_id =?", (lottery_id,))
+        with DatabaseConnection() as c:
+            c.execute("SELECT id, name, total_count FROM prizes WHERE lottery_id =%s", (lottery_id,))
             prizes = c.fetchall()
 
         result = []
@@ -470,8 +471,14 @@ async def cancel_lottery(
     lottery_id: int
 ):
     try:
-        with DatabaseConnection('lottery.db') as c:
-            c.execute("SELECT id FROM lotteries WHERE id = ?", (lottery_id,))
+        with DatabaseConnection() as c:
+            c.execute("""
+                UPDATE lotteries 
+                SET status = 'cancelled', 
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING id
+            """, (lottery_id,))
             lottery = c.fetchone()
             if lottery:
                 c.execute("UPDATE lotteries SET status = 'cancelled' WHERE id = ?", (lottery_id,))

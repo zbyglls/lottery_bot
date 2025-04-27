@@ -1,11 +1,11 @@
 from datetime import datetime
 from bot.callbacks import verify_follow
 from utils import logger
-import sqlite3
+from app.database import DatabaseConnection
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from bot.conversation import SELECTING_ACTION
-from config import YOUR_DOMAIN, DB_PATH
+from config import YOUR_DOMAIN
 from bot.verification import check_channel_subscription, check_lottery_creation
 from bot.handlers import handle_keyword_participate, handle_media_message
 
@@ -33,21 +33,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def create_lottery(user, context, chat_id):
     """创建抽奖的核心逻辑"""
     try:
-        created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        created_at = datetime.now()
         lottery_id = str(datetime.now().timestamp()).replace('.', '')
         
         # 创建初始抽奖记录
-        with sqlite3.connect(DB_PATH) as conn:
+        with DatabaseConnection() as cursor:
             logger.info("成功连接到数据库")
-            cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO lotteries (
-                    id, creator_id, creator_name, status, type, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    creator_id, creator_name, status, type, created_at, updated_at
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
             """, (
-                lottery_id, user.id, user.first_name, 'draft', 'normal', created_at, created_at
+                user.id, user.first_name, 'draft', 'normal', created_at, created_at
             ))
-            conn.commit()
+            lottery_id = cursor.fetchone()[0]
             logger.info(f"成功插入抽奖记录，ID 为 {lottery_id}")
             
         # 构建创建链接
@@ -130,13 +130,13 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
         # 从数据库获取用户创建的抽奖列表
-        with sqlite3.connect('lottery.db') as conn:
-            cursor = conn.cursor()
+        with DatabaseConnection() as cursor:
             cursor.execute("""
-                SELECT lotteries.id, lottery_settings.title, lotteries.status, lotteries.created_at 
-                FROM lotteries , lottery_settings 
-                WHERE lotteries.id=lottery_settings.lottery_id and lotteries.creator_id = ? 
-                ORDER BY lotteries.created_at DESC 
+                SELECT l.id, ls.title, l.status, l.created_at 
+                FROM lotteries l
+                JOIN lottery_settings ls ON l.id = ls.lottery_id 
+                WHERE l.creator_id = %s 
+                ORDER BY l.created_at DESC 
                 LIMIT 5
             """, (user.id,))
             lotteries = cursor.fetchall()
@@ -150,7 +150,7 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for lottery_id, title, status, created_at in lotteries:
             message += f"🎲 {title}\n"
             message += f"状态: {status}\n"
-            message += f"创建时间: {created_at}\n"
+            message += f"创建时间: {created_at:%Y-%m-%d %H:%M:%S}\n"
             message += f"管理链接: {YOUR_DOMAIN}/?lottery_id={lottery_id}&user_id={user.id}\n\n"
 
         await update.message.reply_text(message)

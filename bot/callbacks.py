@@ -1,10 +1,9 @@
 from datetime import datetime
-import sqlite3
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
 from telegram.ext import ContextTypes
 from app.database import DatabaseConnection
 from bot.handlers import handle_media
-from config import DB_PATH, YOUR_BOT
+from config import YOUR_BOT
 from utils import logger
 from bot.verification import check_channel_subscription
 
@@ -47,15 +46,14 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             logger.info(f"用户 {query.from_user.id} 请求取消创建抽奖 {lottery_id}")
             
             try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    cursor = conn.cursor()
+                with DatabaseConnection() as c:
                     # 检查抽奖状态
-                    cursor.execute("""
+                    c.execute("""
                         SELECT status, creator_id 
                         FROM lotteries 
-                        WHERE id = ?
+                        WHERE id = %s
                     """, (lottery_id,))
-                    result = cursor.fetchone()
+                    result = c.fetchone()
                     
                     if not result:
                         await query.message.edit_text("❌ 抽奖记录不存在")
@@ -69,33 +67,31 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         return
                     
                     # 删除抽奖记录
-                    cursor.execute("DELETE FROM lotteries WHERE id = ?", (lottery_id,))
-                    conn.commit()
+                    c.execute("DELETE FROM lotteries WHERE id = %s", (lottery_id,))
                     
                     # 更新消息
                     await query.message.edit_text("✅ 抽奖创建已取消")
                     logger.info(f"抽奖 {lottery_id} 已被用户取消")
                     
-            except sqlite3.Error as e:
+            except Exception as e:
                 logger.error(f"取消抽奖时数据库错误: {e}", exc_info=True)
                 await query.message.reply_text("❌ 取消抽奖失败，请稍后重试")
                 
         elif callback_data == 'view_lotteries':
             # 处理查看抽奖列表
             try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("""
+                with DatabaseConnection() as c:
+                    c.execute("""
                         SELECT l.id, l.status, ls.title, ls.draw_method, 
-                               ls.participant_count, ls.draw_time,
-                               (SELECT COUNT(*) FROM participants p WHERE p.lottery_id = l.id) as current_count
+                            ls.participant_count, ls.draw_time,
+                            (SELECT COUNT(*) FROM participants p WHERE p.lottery_id = l.id) as current_count
                         FROM lotteries l
                         JOIN lottery_settings ls ON l.id = ls.lottery_id
                         WHERE l.status = 'active'
                         ORDER BY l.created_at DESC
                         LIMIT 10
                     """)
-                    active_lotteries = cursor.fetchall()
+                    active_lotteries = c.fetchall()
 
                     if not active_lotteries:
                         await query.message.edit_text(
@@ -167,26 +163,25 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             # 处理查看我的记录
             try:
                 user_id = query.from_user.id
-                with sqlite3.connect(DB_PATH) as conn:
-                    cursor = conn.cursor()
+                with DatabaseConnection() as c:
                     
                     # 获取参与记录
-                    cursor.execute("""
+                    c.execute("""
                         SELECT l.id, ls.title, p.status, p.join_time,
-                               CASE 
-                                   WHEN pw.id IS NOT NULL THEN pr.name
-                                   ELSE NULL
-                               END as prize_name
+                            CASE 
+                                WHEN pw.id IS NOT NULL THEN pr.name
+                                ELSE NULL
+                            END as prize_name
                         FROM participants p
                         JOIN lotteries l ON p.lottery_id = l.id
                         JOIN lottery_settings ls ON l.id = ls.lottery_id
                         LEFT JOIN prize_winners pw ON p.id = pw.participant_id
                         LEFT JOIN prizes pr ON pw.prize_id = pr.id
-                        WHERE p.user_id = ?
+                        WHERE p.user_id = %s
                         ORDER BY p.join_time DESC
                         LIMIT 10
                     """, (user_id,))
-                    records = cursor.fetchall()
+                    records = c.fetchall()
 
                     if not records:
                         await query.message.edit_text(
@@ -236,17 +231,16 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 user = query.from_user
 
                 # 检查抽奖信息
-                with sqlite3.connect(DB_PATH) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("""
+                with DatabaseConnection() as c:
+                    c.execute("""
                         SELECT ls.title, ls.require_username, ls.required_groups,
-                               ls.participant_count, l.status,
-                               (SELECT COUNT(*) FROM participants WHERE lottery_id = l.id) as current_count
+                            ls.participant_count, l.status,
+                            (SELECT COUNT(*) FROM participants WHERE lottery_id = l.id) as current_count
                         FROM lottery_settings ls
                         JOIN lotteries l ON ls.lottery_id = l.id
-                        WHERE l.id = ?
+                        WHERE l.id = %s
                     """, (lottery_id,))
-                    result = cursor.fetchone()
+                    result = c.fetchone()
 
                     if not result:
                         await query.message.edit_text("❌ 抽奖活动不存在")
@@ -260,11 +254,11 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         return
 
                     # 检查是否已参与
-                    cursor.execute("""
+                    c.execute("""
                         SELECT id FROM participants 
-                        WHERE lottery_id = ? AND user_id = ?
+                        WHERE lottery_id = %s AND user_id = %s
                     """, (lottery_id, user.id))
-                    if cursor.fetchone():
+                    if c.fetchone():
                         await query.message.edit_text("❌ 你已经参与过这个抽奖了")
                         return
 
@@ -300,21 +294,18 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                                 continue
 
                     # 添加参与记录
-                    join_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    cursor.execute("""
+                    c.execute("""
                         INSERT INTO participants (
                             lottery_id, user_id, nickname, username, 
                             status, join_time
-                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        ) VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                     """, (
                         lottery_id,
                         user.id,
                         user.first_name,
                         user.username,
-                        'active',
-                        join_time
+                        'active'
                     ))
-                    conn.commit()
                     chat_type = query.message.chat.type
                     if chat_type in ['group', 'supergroup']:
                         # 添加聊天消息确认
@@ -347,11 +338,11 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     # 获取抽奖基本信息
                     c.execute("""
                         SELECT ls.title, ls.description, ls.media_type, ls.media_url, 
-                            ls.draw_method, ls.participant_count, ls.draw_time,
+                            ls.draw_method, ls.participant_count, ls.draw_time::timestamp,
                             ls.required_groups, ls.keyword_group_id, ls.keyword,
                             ls.require_username
                         FROM lottery_settings ls
-                        WHERE ls.lottery_id = ?
+                        WHERE ls.lottery_id = %s
                     """, (lottery_id,))
                     lottery_data = c.fetchone()
                     if not lottery_data:
@@ -361,7 +352,11 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                      draw_time, required_groups, keyword_group_id, keyword, 
                     require_username) = lottery_data
                     # 获取奖品信息
-                    c.execute("SELECT name, total_count FROM prizes WHERE lottery_id = ?", (lottery_id,))
+                    c.execute("""
+                        SELECT name, total_count 
+                        FROM prizes 
+                        WHERE lottery_id = %s
+                    """, (lottery_id,))
                     prizes = c.fetchall()
                 # 构建抽奖消息
                 prize_text = "\n".join([f"🎁 {name} x {count}" for name, count in prizes])
@@ -386,6 +381,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 else:
                     draw_info = f"⏰ {draw_time} 准时开奖"
                 message = (
+                    f"养生品茶🍵： https://t.me/yangshyyds\n\n"
                     f"🎉 抽奖活动\n\n"
                     f"📢 抽奖标题： {title}\n\n"
                     f"📝 抽奖描述： \n{description}\n\n"
@@ -513,9 +509,8 @@ async def refresh_lottery_list(update: Update, context: ContextTypes.DEFAULT_TYP
     """刷新抽奖列表"""
     query = update.callback_query
     try:
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
+        with DatabaseConnection() as c:
+            c.execute("""
                 SELECT l.id, l.status, ls.title, ls.draw_method, 
                        ls.participant_count, ls.draw_time,
                        (SELECT COUNT(*) FROM participants p WHERE p.lottery_id = l.id) as current_count
@@ -525,7 +520,7 @@ async def refresh_lottery_list(update: Update, context: ContextTypes.DEFAULT_TYP
                 ORDER BY l.created_at DESC
                 LIMIT 10
             """)
-            active_lotteries = cursor.fetchall()
+            active_lotteries = c.fetchall()
 
             message = "🎲 <b>当前进行中的抽奖活动</b>\n\n"
             keyboard = []

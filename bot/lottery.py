@@ -1,29 +1,27 @@
 import random
-import sqlite3
+from app.database import DatabaseConnection
 from telegram import Bot
 from bot.handlers import send_batch_winner_notifications, send_lottery_result_to_group
 from utils import logger
-from config import DB_PATH
+
 
 async def draw_lottery(bot: Bot, lottery_id: str):
     """执行开奖"""
     try:
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-
-            #获取创建者ID
+        with DatabaseConnection() as cursor:
+            # 获取创建者ID
             cursor.execute("""
                 SELECT creator_id 
                 FROM lotteries 
-                WHERE id = ?
+                WHERE id = %s
             """, (lottery_id,))
             creator_id = cursor.fetchone()[0]
 
             #获取抽奖信息
             cursor.execute("""
-                SELECT keyword_group_id,required_groups
+                SELECT keyword_group_id, required_groups
                 FROM lottery_settings    
-                WHERE lottery_id = ?
+                WHERE lottery_id = %s
             """, (lottery_id,))
             keyword_group, required_groups = cursor.fetchone()
             groups = required_groups.split(',')
@@ -38,7 +36,7 @@ async def draw_lottery(bot: Bot, lottery_id: str):
             cursor.execute("""
                 SELECT id, name, total_count 
                 FROM prizes 
-                WHERE lottery_id = ?
+                WHERE lottery_id = %s
             """, (lottery_id,))
             prizes = cursor.fetchall()
 
@@ -46,7 +44,7 @@ async def draw_lottery(bot: Bot, lottery_id: str):
             cursor.execute("""
                 SELECT id, user_id, nickname 
                 FROM participants 
-                WHERE lottery_id = ? AND status = 'active'
+                WHERE lottery_id = %s AND status = 'active'
             """, (lottery_id,))
             participants = cursor.fetchall()
 
@@ -86,17 +84,16 @@ async def draw_lottery(bot: Bot, lottery_id: str):
             cursor.executemany("""
                 INSERT INTO prize_winners (
                     prize_id, participant_id, lottery_id, status, win_time
-                ) VALUES (?, ?, ?, 'pending', CURRENT_TIMESTAMP)
+                ) VALUES (%s, %s, %s, 'pending', CURRENT_TIMESTAMP)
             """, winners)
 
             # 更新抽奖状态
             cursor.execute("""
                 UPDATE lotteries 
                 SET status = 'completed', updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (lottery_id,))
             
-            conn.commit()
 
             # 发送中奖通知
             await send_batch_winner_notifications(lottery_id, creator_id)

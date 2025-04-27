@@ -53,7 +53,7 @@ async def send_lottery_info_to_creator(creator_id: str, lottery_data: dict):
             f"-- {name}*{count}" 
             for name, count in zip(lottery_data['prize_names'], lottery_data['prize_counts'])
         ])
-        required_name = lottery_data.get('required_username', '')
+        required_name = lottery_data.get('required_username')
         require_text = ''
         if required_name:
             require_text = f"-- 参与者必须设置用户名\n"
@@ -246,7 +246,7 @@ async def send_batch_winner_notifications(lottery_id: int, creator_id: str):
                 JOIN lottery_settings ls ON w.lottery_id = ls.lottery_id
                 JOIN prizes pr ON w.prize_id = pr.id
                 JOIN lotteries l ON ls.lottery_id = l.id
-                WHERE w.lottery_id = ? 
+                WHERE w.lottery_id = %s 
             """, (lottery_id,))
             winners = c.fetchall()
         for winner in winners:
@@ -287,7 +287,7 @@ async def send_lottery_result_to_group(lottery_id: int, groups: list):
                         WHERE lottery_id = ls.lottery_id) as total_participants
                 FROM lottery_settings ls
                 JOIN lotteries l ON ls.lottery_id = l.id
-                WHERE ls.lottery_id = ?
+                WHERE ls.lottery_id = %s
             """, (lottery_id,))
             lottery_info = c.fetchone()
             
@@ -304,7 +304,7 @@ async def send_lottery_result_to_group(lottery_id: int, groups: list):
                 FROM prize_winners w
                 JOIN participants p ON w.participant_id = p.id
                 JOIN prizes pr ON w.prize_id = pr.id
-                WHERE w.lottery_id = ?
+                WHERE w.lottery_id = %s
                 ORDER BY pr.id ASC
             """, (lottery_id,))
             winners = c.fetchall()
@@ -388,8 +388,8 @@ async def handle_keyword_participate(update: Update, context):
                 FROM lotteries l
                 JOIN lottery_settings ls ON l.id = ls.lottery_id
                 WHERE l.status = 'active'
-                AND ls.keyword_group_id = ?
-                AND ls.keyword = ?
+                AND ls.keyword_group_id = %s
+                AND ls.keyword = %s
             """, (str(chat_id), message.text.strip()))
             
             lottery = c.fetchone()
@@ -405,7 +405,7 @@ async def handle_keyword_participate(update: Update, context):
             # 检查重复参与
             c.execute("""
                 SELECT 1 FROM participants 
-                WHERE lottery_id = ? AND user_id = ?
+                WHERE lottery_id = %s AND user_id = %s
             """, (lottery_id, user.id))
             
             if c.fetchone():
@@ -444,7 +444,7 @@ async def handle_keyword_participate(update: Update, context):
                 INSERT INTO participants (
                     lottery_id, user_id, nickname, username,
                     join_time, status
-                ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')
+                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, 'active')
             """, (lottery_id, user.id, user.full_name, user.username))
             
             # 发送参与成功提示

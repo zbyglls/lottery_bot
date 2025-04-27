@@ -24,9 +24,6 @@ WEBHOOK_PATH = os.getenv('WEBHOOK_PATH', '/webhook')
 YOUR_BOT = os.getenv('YOUR_BOT', 'your_bot')
 
 
-# 数据库配置
-DB_PATH = os.path.join(BASE_DIR, 'lottery.db')
-
 # 媒体文件配置
 MEDIA_ROOT = BASE_DIR / 'media'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4'}
@@ -38,3 +35,12 @@ JOB_QUEUE_WORKERS = 4  # 工作线程数
 # 域名配置
 YOUR_DOMAIN = os.getenv('YOUR_DOMAIN', 'your-domain')
 logger.info(f"YOUR_DOMAIN={YOUR_DOMAIN}")
+
+# PostgreSQL 配置
+DB_CONFIG = {
+    'dbname': os.getenv('DB_NAME', 'lottery_bot'),
+    'user': os.getenv('DB_USER', 'postgres'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': os.getenv('DB_PORT', '5432')
+}
