@@ -397,8 +397,13 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 )
                     # 添加媒体消息（如果有）
                 if media_url:
-                    media_message = await handle_media(media_url)
-                
+                    try:
+                        media_message = await handle_media(media_url)
+                    except Exception as e:
+                        logger.error(f"处理媒体文件失败: {e}")
+                        media_message = None
+                else:
+                    media_message = None
                 # 创建参与按钮
                 try:
                     chat = await context.bot.get_chat(group_id)
