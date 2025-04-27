@@ -448,15 +448,15 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                                 media=[InputMediaPhoto(media_message, caption=message)],
                                 reply_markup=reply_markup
                             )
-                    else:
-                        # 发送纯文本消息
-                       sent_message = await context.bot.send_message(
-                            chat_id=group_id,
-                            text=message,
-                            reply_markup=reply_markup,
-                            parse_mode='HTML',
-                            disable_web_page_preview=False
-                        )    
+                else:
+                    # 发送纯文本消息
+                    sent_message = await context.bot.send_message(
+                        chat_id=group_id,
+                        text=message,
+                        reply_markup=reply_markup,
+                        parse_mode='HTML',
+                        disable_web_page_preview=False
+                    )    
                 if sent_message:
                     # 发布成功提示    
                     await context.bot.send_message(chat_id=query.message.chat_id, text="✅ 发布成功！")
