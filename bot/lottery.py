@@ -1,31 +1,30 @@
 import random
-import sqlite3
 from telegram import Bot
+from app.database import DatabaseConnection
 from bot.handlers import send_batch_winner_notifications, send_lottery_result_to_group
 from utils import logger
-from config import DB_PATH
+
 
 async def draw_lottery(bot: Bot, lottery_id: str):
     """执行开奖"""
     try:
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
+        with DatabaseConnection() as conn:
 
             #获取创建者ID
-            cursor.execute("""
+            conn.execute("""
                 SELECT creator_id 
                 FROM lotteries 
                 WHERE id = ?
             """, (lottery_id,))
-            creator_id = cursor.fetchone()[0]
+            creator_id = conn.fetchone()[0]
 
             #获取抽奖信息
-            cursor.execute("""
+            conn.execute("""
                 SELECT keyword_group_id,required_groups
                 FROM lottery_settings    
                 WHERE lottery_id = ?
             """, (lottery_id,))
-            keyword_group, required_groups = cursor.fetchone()
+            keyword_group, required_groups = conn.fetchone()
             groups = required_groups.split(',')
             groups.append(keyword_group)
             groups = [_ for _ in set(groups) if _]
@@ -35,20 +34,20 @@ async def draw_lottery(bot: Bot, lottery_id: str):
             }
 
             # 获取奖品信息
-            cursor.execute("""
+            conn.execute("""
                 SELECT id, name, total_count 
                 FROM prizes 
                 WHERE lottery_id = ?
             """, (lottery_id,))
-            prizes = cursor.fetchall()
+            prizes = conn.fetchall()
 
             # 获取参与者
-            cursor.execute("""
+            conn.execute("""
                 SELECT id, user_id, nickname 
                 FROM participants 
                 WHERE lottery_id = ? AND status = 'active'
             """, (lottery_id,))
-            participants = cursor.fetchall()
+            participants = conn.fetchall()
 
             if not prizes or not participants:
                 logger.error(f"抽奖 {lottery_id} 缺少奖品或参与者")
@@ -83,29 +82,29 @@ async def draw_lottery(bot: Bot, lottery_id: str):
                 ]
 
             # 记录中奖信息
-            cursor.executemany("""
+            conn.executemany("""
                 INSERT INTO prize_winners (
                     prize_id, participant_id, lottery_id, status, win_time
                 ) VALUES (?, ?, ?, 'pending', CURRENT_TIMESTAMP)
             """, winners)
 
             # 更新抽奖状态
-            cursor.execute("""
+            conn.execute("""
                 UPDATE lotteries 
                 SET status = 'completed', updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             """, (lottery_id,))
             
-            conn.commit()
 
             # 发送中奖通知
-            await send_batch_winner_notifications(lottery_id, creator_id)
+            logger.info(f"准备给中奖者发送中奖通知：")
+            logger.info(f"中奖者数据: {winners}")
+            await send_batch_winner_notifications(winners, creator_id)
             
             # 发送群组通知
-            logger.info(f"groups:{groups}")
             if lottery_info.get('groups'):
                 await send_lottery_result_to_group(
-                    lottery_id,
+                    winners,
                     lottery_info['groups']
                 )
 

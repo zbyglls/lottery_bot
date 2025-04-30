@@ -153,3 +153,43 @@ select:focus {
 #keyword-group-dropdown li:hover {
     background-color: #f0f0f0;
 }
+/* 移动端适配 */
+@media screen and (max-width: 640px) {
+    .container {
+        padding: 0.5rem;
+    }
+    
+    /* 顶部导航优化 */
+    .flex.justify-between.items-center {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    /* 标签页优化 */
+    ul.flex.space-x-4 {
+        width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 8px;
+    }
+    
+    /* 表单元素优化 */
+    .flex.items-center.space-x-4 {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    /* 模态框优化 */
+    .modal > div {
+        width: 95%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    
+    /* 表格优化 */
+    table {
+        display: block;
+        overflow-x: auto;
+    }
+}

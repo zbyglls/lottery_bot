@@ -1,7 +1,5 @@
 from datetime import datetime
-import sqlite3
 from telegram.ext import ContextTypes
-from config import DB_PATH
 from utils import logger
 from app.database import DatabaseConnection
 
@@ -22,16 +20,14 @@ async def check_lottery_creation(context: ContextTypes.DEFAULT_TYPE):
     user_id = job.data['user_id']
     
     try:
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
+        with DatabaseConnection() as conn:
             # 检查抽奖状态
-            cursor.execute("SELECT status FROM lotteries WHERE id = ?", (lottery_id,))
-            result = cursor.fetchone()
+            conn.execute("SELECT status FROM lotteries WHERE id = ?", (lottery_id,))
+            result = conn.fetchone()
             
             if result and result[0] == 'draft':
-                # 如果仍然是草稿状态，删除记录
-                cursor.execute("DELETE FROM lotteries WHERE id = ?", (lottery_id,))
-                conn.commit()
+                # 如果仍然是草稿状态，更新记录状态为 cancelled
+                conn.execute("UPDATE lotteries SET status = 'cancelled' WHERE id = ?", (lottery_id,))
                 
                 # 通知用户
                 await context.bot.send_message(
@@ -39,22 +35,19 @@ async def check_lottery_creation(context: ContextTypes.DEFAULT_TYPE):
                     text="⚠️ 抽奖创建已超时，记录已被清除。如需创建请重新使用 /new 命令。"
                 )
             elif result and result[0] == 'creating':
-                cursor.execute("""
+                conn.execute("""
                     SELECT id, strftime('%s', 'now') - strftime('%s', created_at) as time_diff
                     FROM lotteries WHERE id = ?
                     """, (lottery_id,))
-                result = cursor.fetchone()
+                result = conn.fetchone()
                 lottery_id, time_diff = result
                 if time_diff > 5400:  # 超过90分钟
-                    cursor.execute("UPDATE lotteries SET status = 'cancelled' WHERE id = ?", (lottery_id,))
-                    conn.commit()
+                    conn.execute("UPDATE lotteries SET status = 'cancelled' WHERE id = ?", (lottery_id,))
                     await context.bot.send_message(
                         chat_id=user_id,
                         text="⚠️ 抽奖创建已超时，记录已被清除。如需创建请重新使用 /new 命令。"
                     )
             elif result and result[0] == 'cancelled':
-                cursor.execute("DELETE FROM lotteries WHERE id = ?", (lottery_id,))
-                conn.commit()
                 await context.bot.send_message(
                     chat_id=user_id,
                     text="⚠️ 抽奖创建已被取消，记录已被清除。如需创建请重新使用 /new 命令。"
@@ -104,6 +97,7 @@ async def check_lottery_status(lottery_id: str, user_id: str) -> dict:
             if int(time_diff) > 3600 and status == 'draft':
                 # 更新过期记录状态为 cancelled
                 c.execute("UPDATE lotteries SET status = 'cancelled' WHERE id = ?", (lottery_id,))
+                logger.info(f"抽奖 {lottery_id} 已过期，状态更新为 cancelled")
                 return {
                     'valid': False,
                     'message': '抽奖创建链接已过期'
@@ -115,6 +109,12 @@ async def check_lottery_status(lottery_id: str, user_id: str) -> dict:
                     SET status = 'creating', updated_at = ? 
                     WHERE id = ?
                 """, (datetime.now(), lottery_id))
+                logger.info(f"抽奖 {lottery_id} 状态更新为 creating")
+                return {
+                    'valid': True,
+                    'status': 'creating',
+                    'created_at': datetime.now()
+                }
                 
             return {
                 'valid': True,

@@ -485,7 +485,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const mediaTypeSelect = document.getElementById('media-type');
             const imageLinkInput = document.getElementById('image-link');
             const videoLinkInput = document.getElementById('video-link');
-            const selectedValue = mediaTypeSelect.value;
+            let selectedValue = mediaTypeSelect.value;
+            if (selectedValue === 'none') {
+                selectedValue = ''; // 如果没有选择，则设置为空字符串
+            }
             formData.append('media_type', selectedValue);
             if (selectedValue === 'image' && imageLinkInput) {
                 formData.append('media_url', imageLinkInput.value);
@@ -515,6 +518,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const prizeCount = cells[1].textContent;
                 formData.append('prize_name', prizeName);
                 formData.append('prize_count', prizeCount);
+            }
+            // 处理开奖时间
+            const drawMethod = formData.get('draw_method');
+            if (drawMethod === 'draw_at_time') {
+                const localDrawTime = formData.get('draw_time');
+                const utcDrawTime = convertToUTC(localDrawTime);
+                formData.set('draw_time', utcDrawTime);  // 替换为UTC格式
+                
             }
             return formData;
         }
@@ -546,3 +557,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 200);
     });
 });
+
+
+// 检测移动设备
+function isMobile() {
+    return window.matchMedia("(max-width: 640px)").matches;
+}
+
+// 移动端优化
+if(isMobile()) {
+    // 增大点击区域
+    document.querySelectorAll('button, a, input[type="radio"], input[type="checkbox"]').forEach(el => {
+        el.style.minHeight = '44px';
+        el.style.minWidth = '44px';
+    });
+    
+    // 优化表单输入
+    document.querySelectorAll('input, select, textarea').forEach(el => {
+        el.style.fontSize = '16px'; // 防止iOS自动缩放
+    });
+}
+
+// 添加时区转换函数
+function convertToUTC(localTime) {
+    // 将本地时间转换为ISO格式(YYYY-MM-DDTHH:mm:ssZ)
+    const date = new Date(localTime);
+    return date.toISOString();
+
+}

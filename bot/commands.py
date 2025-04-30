@@ -1,11 +1,11 @@
 from datetime import datetime
+from app.database import DatabaseConnection
 from bot.callbacks import verify_follow
 from utils import logger
-import sqlite3
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from bot.conversation import SELECTING_ACTION
-from config import YOUR_DOMAIN, DB_PATH
+from config import YOUR_DOMAIN
 from bot.verification import check_channel_subscription, check_lottery_creation
 from bot.handlers import handle_keyword_participate, handle_media_message
 
@@ -37,17 +37,15 @@ async def create_lottery(user, context, chat_id):
         lottery_id = str(datetime.now().timestamp()).replace('.', '')
         
         # 创建初始抽奖记录
-        with sqlite3.connect(DB_PATH) as conn:
+        with DatabaseConnection() as conn:
             logger.info("成功连接到数据库")
-            cursor = conn.cursor()
-            cursor.execute("""
+            conn.execute("""
                 INSERT INTO lotteries (
                     id, creator_id, creator_name, status, type, created_at, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 lottery_id, user.id, user.first_name, 'draft', 'normal', created_at, created_at
             ))
-            conn.commit()
             logger.info(f"成功插入抽奖记录，ID 为 {lottery_id}")
             
         # 构建创建链接
@@ -130,16 +128,15 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
         # 从数据库获取用户创建的抽奖列表
-        with sqlite3.connect('lottery.db') as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
+        with DatabaseConnection() as conn: 
+            conn.execute("""
                 SELECT lotteries.id, lottery_settings.title, lotteries.status, lotteries.created_at 
                 FROM lotteries , lottery_settings 
                 WHERE lotteries.id=lottery_settings.lottery_id and lotteries.creator_id = ? 
                 ORDER BY lotteries.created_at DESC 
                 LIMIT 5
             """, (user.id,))
-            lotteries = cursor.fetchall()
+            lotteries = conn.fetchall()
 
         if not lotteries:
             await update.message.reply_text("你还没有创建过抽奖活动。")

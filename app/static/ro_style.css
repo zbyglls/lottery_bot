@@ -19,3 +19,42 @@ input[readonly], textarea[readonly], select[disabled] {
     background-color: #f3f4f6;
     cursor: not-allowed;
 }
+/* 移动端适配 */
+@media screen and (max-width: 768px) {
+    .container {
+        padding: 0 10px;
+    }
+    
+    .flex.justify-between.items-center.mb-4 {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .space-x-4 {
+        margin-top: 10px;
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+    }
+    
+    .bg-white.rounded-lg.shadow.p-6 {
+        padding: 15px;
+    }
+    
+    /* 模态框适配 */
+    #participants-modal .bg-white {
+        width: 95%;
+        margin-top: 10px;
+    }
+    
+    /* 表格适配 */
+    .overflow-x-auto {
+        overflow-x: scroll;
+    }
+    
+    /* 按钮大小调整 */
+    button {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+}

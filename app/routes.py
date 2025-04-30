@@ -291,6 +291,8 @@ async def create_lottery(
         
         # 处理群组 ID 列表
         required_groups_str = ','.join(group_ids) if group_ids else ''
+        # 处理抽奖时间
+        draw_time = parse_time(draw_time) if draw_time else ''
 
         # 3. 创建抽奖活动
         with DatabaseConnection() as c:

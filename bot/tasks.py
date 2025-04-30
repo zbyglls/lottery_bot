@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import aiohttp
 from utils import logger
 from bot.bot_instance import get_bot
@@ -24,7 +24,7 @@ async def check_lottery_draws():
                 await asyncio.sleep(60)
                 continue
 
-            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            current_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
             
             with DatabaseConnection() as c:
                 # 1. 检查定时开奖
@@ -33,11 +33,11 @@ async def check_lottery_draws():
                     FROM lotteries l
                     JOIN lottery_settings ls ON l.id = ls.lottery_id
                     WHERE l.status = 'active' 
-                    AND ls.draw_method = 'draw_time'
+                    AND ls.draw_method = 'draw_at_time'
                     AND ls.draw_time <= ?
                 """, (current_time,))
                 time_draws = c.fetchall()
-
+                logger.info(f"定时开奖抽奖活动: {time_draws}")
                 # 2. 检查满人开奖
                 c.execute("""
                     SELECT 

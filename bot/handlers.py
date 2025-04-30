@@ -53,7 +53,7 @@ async def send_lottery_info_to_creator(creator_id: str, lottery_data: dict):
             f"-- {name}*{count}" 
             for name, count in zip(lottery_data['prize_names'], lottery_data['prize_counts'])
         ])
-        required_name = lottery_data.get('required_username', '')
+        required_name = lottery_data.get('required_username')
         require_text = ''
         if required_name:
             require_text = f"-- 参与者必须设置用户名\n"
@@ -228,47 +228,41 @@ async def send_winner_notification(winner_id: int, lottery_info: dict, prize_inf
         return False
 
 # 批量发送中奖通知
-async def send_batch_winner_notifications(lottery_id: int, creator_id: str):
+async def send_batch_winner_notifications(winners: list, creator_id: str):
     """批量发送某个抽奖活动的所有中奖通知"""
     try:
         bot = get_bot()
         if not bot:
             logger.error("无法获取机器人实例")
             return False
-        with DatabaseConnection() as c:
-            # 获取中奖记录
-            c.execute("""
-                SELECT p.user_id, w.prize_id, 
-                       ls.title, pr.name,
-                       l.creator_id
-                FROM prize_winners w
-                JOIN participants p ON w.participant_id = p.id
-                JOIN lottery_settings ls ON w.lottery_id = ls.lottery_id
-                JOIN prizes pr ON w.prize_id = pr.id
-                JOIN lotteries l ON ls.lottery_id = l.id
-                WHERE w.lottery_id = ? 
-            """, (lottery_id,))
-            winners = c.fetchall()
-        for winner in winners:
-            user_id, prize_id, title, prize_name, creator_id = winner
-            creator = await bot.get_chat(creator_id)
-            creator_name = creator.username
-            await send_winner_notification(
-                user_id,
-                {'lottery_id': lottery_id, 'title': title, 'creator_name': creator_name},
-                {'id': prize_id, 'name': prize_name}
-            )
-            # 添加延迟避免触发限制
-            await asyncio.sleep(0.1)
+        creator = await bot.get_chat(creator_id)
+        creator_name = creator.username
+        for _ in winners:
+            prize_id, participant_id, lottery_id = _
+            with DatabaseConnection() as c:
+                # 获取中奖记录
+                c.execute("SELECT user_id FROM participants WHERE id = ?", (participant_id,))
+                user_id = c.fetchone()[0]
+                c.execute("SELECT name FROM prizes WHERE id = ?", (prize_id,))
+                prize_name = c.fetchone()[0]
+                c.execute("SELECT title FROM lottery_settings WHERE lottery_id = ?", (lottery_id,))
+                title = c.fetchone()[0]
+                await send_winner_notification(
+                    user_id,
+                    {'lottery_id': lottery_id, 'title': title, 'creator_name': creator_name},
+                    {'id': prize_id, 'name': prize_name}
+                )
+                # 添加延迟避免触发限制
+                await asyncio.sleep(0.1)
 
     except Exception as e:
         logger.error(f"批量发送中奖通知时出错: {e}", exc_info=True)
 
-async def send_lottery_result_to_group(lottery_id: int, groups: list):
+async def send_lottery_result_to_group(winners: list, groups: list):
     """发送抽奖结果到群组
     
     Args:
-        lottery_id: 抽奖活动ID
+        winners: 中奖者信息列表
         groups: 群组ID列表
     """
     try:
@@ -276,7 +270,7 @@ async def send_lottery_result_to_group(lottery_id: int, groups: list):
         if not bot:
             logger.error("无法获取机器人实例")
             return False
-
+        lottery_id = winners[0][2]  # 获取抽奖ID
         # 获取抽奖和中奖信息
         with DatabaseConnection() as c:
             # 获取抽奖基本信息
@@ -299,15 +293,14 @@ async def send_lottery_result_to_group(lottery_id: int, groups: list):
             user = await bot.get_chat(creator_id)
             creator_name = user.username
             # 获取中奖信息
-            c.execute("""
-                SELECT p.nickname, p.username, pr.name as prize_name
-                FROM prize_winners w
-                JOIN participants p ON w.participant_id = p.id
-                JOIN prizes pr ON w.prize_id = pr.id
-                WHERE w.lottery_id = ?
-                ORDER BY pr.id ASC
-            """, (lottery_id,))
-            winners = c.fetchall()
+            winns = []
+            for _ in winners:
+                prize_id, participant_id, lottery_id = _
+                c.execute("SELECT nickname, username FROM participants WHERE id = ?", (participant_id,))
+                nickname, username = c.fetchall()[0]
+                c.execute("SELECT name FROM prizes WHERE id = ?", (prize_id,))
+                prize_name = c.fetchall()[0][0]
+                winns.append((nickname, username, prize_name))
 
         # 构建开奖结果消息
         message = (
@@ -318,7 +311,7 @@ async def send_lottery_result_to_group(lottery_id: int, groups: list):
         )
 
         # 添加中奖者信息
-        for winner in winners:
+        for winner in winns:
             nickname, username, prize_name = winner
             winner_text = f"@{username}" if username else nickname
             message += f"🎁 {prize_name}：{winner_text}\n"

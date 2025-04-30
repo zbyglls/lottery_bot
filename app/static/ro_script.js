@@ -138,3 +138,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// 检测移动设备
+function isMobile() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// 如果是移动设备，添加特定事件处理
+if(isMobile()) {
+    // 增大点击区域
+    document.querySelectorAll('button').forEach(btn => {
+        btn.style.minHeight = '44px'; // 苹果推荐的最小点击区域
+    });
+    
+    // 模态框滚动优化
+    const modal = document.getElementById('participants-modal');
+    if(modal) {
+        modal.style.overflowY = 'auto';
+        modal.style.maxHeight = '80vh';
+    }
+}
