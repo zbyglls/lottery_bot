@@ -54,6 +54,7 @@ async def check_lottery_draws():
                     HAVING COUNT(p.id) >= ls.participant_count
                 """)
                 full_draws = c.fetchall()
+                logger.info(f"满人开奖抽奖活动: {full_draws}")
 
             # 处理定时开奖
             for lottery_id, title in time_draws:
