@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import pymongo
 from config import MONGO_URI, MONGO_DB
 from utils import logger, mark_initialized
-from typing import Optional, Dict, Any,Long
+from typing import Optional, Dict, Any
 
 class MongoDBConnection:
     _instance = None
@@ -52,8 +52,8 @@ async def init_db():
                     'bsonType': 'object',
                     'required': ['id', 'creator_id', 'status', 'created_at', 'updated_at'],
                     'properties': {
-                        'id': {'bsonType': 'long'},
-                        'creator_id': {'bsonType': 'long'},
+                        'id': {'bsonType': 'string'},
+                        'creator_id': {'bsonType': 'string'},
                         'creator_name': {'bsonType': 'string'},
                         'status': {
                             'enum': ['draft', 'creating', 'active', 'completed', 'cancelled']
@@ -68,7 +68,7 @@ async def init_db():
                     'bsonType': 'object',
                     'required': ['lottery_id', 'title','description','join_method', 'draw_method'],
                     'properties': {
-                        'lottery_id': {'bsonType': 'long'},
+                        'lottery_id': {'bsonType': 'string'},
                         'title': {'bsonType': 'string'},
                         'description': {'bsonType': 'string'},
                         'media_type': {'enum': ['','image', 'video']},
@@ -97,7 +97,7 @@ async def init_db():
                     'bsonType': 'object',
                     'required': ['lottery_id', 'name', 'total_count'],
                     'properties': {
-                        'lottery_id': {'bsonType': 'long'},
+                        'lottery_id': {'bsonType': 'string'},
                         'name': {'bsonType': 'string'},
                         'total_count': {'bsonType': 'int'}
                     }
@@ -110,7 +110,7 @@ async def init_db():
                     'properties': {
                         'prize_id': {'bsonType': 'objectId'},
                         'participant_id': {'bsonType': 'objectId'},
-                        'lottery_id': {'bsonType': 'long'},
+                        'lottery_id': {'bsonType': 'string'},
                         'status': {
                             'enum': ['pending', 'claimed', 'expired']
                         },
@@ -123,8 +123,8 @@ async def init_db():
                     'bsonType': 'object',
                     'required': ['lottery_id', 'user_id', 'nickname'],
                     'properties': {
-                        'lottery_id': {'bsonType': 'long'},
-                        'user_id': {'bsonType': 'long'},
+                        'lottery_id': {'bsonType': 'string'},
+                        'user_id': {'bsonType': 'string'},
                         'nickname': {'bsonType': 'string'},
                         'username': {'bsonType': 'string'},
                         'join_time': {'bsonType': 'date'}
@@ -136,8 +136,8 @@ async def init_db():
                     'bsonType': 'object',
                     'required': ['lottery_id', 'user_id', 'group_id', 'message_count'],
                     'properties': {
-                        'lottery_id': {'bsonType': 'long'},
-                        'user_id': {'bsonType': 'long'},
+                        'lottery_id': {'bsonType': 'string'},
+                        'user_id': {'bsonType': 'string'},
                         'group_id': {'bsonType': 'string'},
                         'message_count': {'bsonType': 'int'},
                         'last_message_time': {'bsonType': 'date'}
@@ -237,15 +237,15 @@ async def check_db():
 # 集合模式定义（用于文档参考）
 COLLECTION_SCHEMAS = {
     'lotteries': {
-        'id': int,
-        'creator_id': int,
+        'id': str,
+        'creator_id': str,
         'creator_name': str,
         'status': str,  # draft, creating, active, completed, cancelled
         'created_at': datetime,
         'updated_at': datetime
     },
     'lottery_settings': {
-        'lottery_id': int,
+        'lottery_id': str,
         'title': str,
         'media_type': str,  # image or video
         'media_url': str,
@@ -264,27 +264,27 @@ COLLECTION_SCHEMAS = {
         'message_count_tracked': bool
     },
     'prizes': {
-        'lottery_id': int,
+        'lottery_id': str,
         'name': str,
         'total_count': int
     },
     'prize_winners': {
-        'prize_id': int,
-        'participant_id': int,
-        'lottery_id': int,
+        'prize_id': str,
+        'participant_id': str,
+        'lottery_id': str,
         'win_time': datetime,
         'status': str  # pending, claimed, expired
     },
     'participants': {
-        'lottery_id': int,
+        'lottery_id': str,
         'user_id': str,
         'nickname': str,
         'username': str,
         'join_time': datetime
     },
     'message_counts': {
-        'lottery_id': int,
-        'user_id': int,
+        'lottery_id': str,
+        'user_id': str,
         'group_id': str,
         'message_count': int,
         'last_message_time': datetime
