@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 import pymongo
 from config import MONGO_URI, MONGO_DB
 from utils import logger, mark_initialized
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
+
 
 class MongoDBConnection:
     _instance = None
