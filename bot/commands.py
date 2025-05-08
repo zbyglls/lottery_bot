@@ -39,7 +39,7 @@ async def create_lottery(user, context, chat_id):
         # 创建初始抽奖记录
         db = await MongoDBConnection.get_database()
         lottery_doc = {
-            'lottery_id': lottery_id,
+            'id': lottery_id,
             'creator_id': user.id,
             'creator_name': user.first_name,
             'status': 'draft',

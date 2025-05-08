@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import pymongo
 from config import MONGO_URI, MONGO_DB
 from utils import logger, mark_initialized
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any,Long
 
 class MongoDBConnection:
     _instance = None
@@ -52,8 +52,8 @@ async def init_db():
                     'bsonType': 'object',
                     'required': ['id', 'creator_id', 'status', 'created_at', 'updated_at'],
                     'properties': {
-                        'id': {'bsonType': 'int'},
-                        'creator_id': {'bsonType': 'int'},
+                        'id': {'bsonType': 'long'},
+                        'creator_id': {'bsonType': 'long'},
                         'creator_name': {'bsonType': 'string'},
                         'status': {
                             'enum': ['draft', 'creating', 'active', 'completed', 'cancelled']
@@ -68,7 +68,7 @@ async def init_db():
                     'bsonType': 'object',
                     'required': ['lottery_id', 'title','description','join_method', 'draw_method'],
                     'properties': {
-                        'lottery_id': {'bsonType': 'int'},
+                        'lottery_id': {'bsonType': 'long'},
                         'title': {'bsonType': 'string'},
                         'description': {'bsonType': 'string'},
                         'media_type': {'enum': ['','image', 'video']},
@@ -97,7 +97,7 @@ async def init_db():
                     'bsonType': 'object',
                     'required': ['lottery_id', 'name', 'total_count'],
                     'properties': {
-                        'lottery_id': {'bsonType': 'int'},
+                        'lottery_id': {'bsonType': 'long'},
                         'name': {'bsonType': 'string'},
                         'total_count': {'bsonType': 'int'}
                     }
@@ -110,7 +110,7 @@ async def init_db():
                     'properties': {
                         'prize_id': {'bsonType': 'objectId'},
                         'participant_id': {'bsonType': 'objectId'},
-                        'lottery_id': {'bsonType': 'int'},
+                        'lottery_id': {'bsonType': 'long'},
                         'status': {
                             'enum': ['pending', 'claimed', 'expired']
                         },
@@ -123,8 +123,8 @@ async def init_db():
                     'bsonType': 'object',
                     'required': ['lottery_id', 'user_id', 'nickname'],
                     'properties': {
-                        'lottery_id': {'bsonType': 'int'},
-                        'user_id': {'bsonType': 'int'},
+                        'lottery_id': {'bsonType': 'long'},
+                        'user_id': {'bsonType': 'long'},
                         'nickname': {'bsonType': 'string'},
                         'username': {'bsonType': 'string'},
                         'join_time': {'bsonType': 'date'}
@@ -136,8 +136,8 @@ async def init_db():
                     'bsonType': 'object',
                     'required': ['lottery_id', 'user_id', 'group_id', 'message_count'],
                     'properties': {
-                        'lottery_id': {'bsonType': 'string'},
-                        'user_id': {'bsonType': 'int'},
+                        'lottery_id': {'bsonType': 'long'},
+                        'user_id': {'bsonType': 'long'},
                         'group_id': {'bsonType': 'string'},
                         'message_count': {'bsonType': 'int'},
                         'last_message_time': {'bsonType': 'date'}
