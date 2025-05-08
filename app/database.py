@@ -72,23 +72,58 @@ async def init_db():
                         'lottery_id': {'bsonType': 'string'},
                         'title': {'bsonType': 'string'},
                         'description': {'bsonType': 'string'},
-                        'media_type': {'enum': ['','image', 'video']},
-                        'media_url': {'bsonType': 'string'},
-                        'join_method': {
-                            'enum': ['private_chat', 'group_keyword', 'group_message']
+                        'media_type': {'enum': ['image', 'video', None]},
+                        'media_url': {                    
+                            'oneOf': [
+                                {'bsonType': 'string'},
+                                {'bsonType': 'null'}
+                            ]
                         },
-                        'keyword_group_id': {'bsonType': 'string'},
-                        'keyword': {'bsonType': 'string'},
-                        'message_group_id': {'bsonType': 'string'},
-                        'message_count': {'bsonType': 'int'},
-                        'message_check_time': {'bsonType': 'int'},
+                        'join_method': {
+                            'enum': ['private_chat_bot', 'group_keyword', 'group_message']
+                        },
+                        'keyword_group_id': {
+                            'oneOf': [
+                                {'bsonType': 'string'},
+                                {'bsonType': 'null'}
+                            ]
+                        },
+                        'keyword': {
+                            'oneOf': [
+                                {'bsonType': 'string'},
+                                {'bsonType': 'null'}
+                            ]
+                        },
+                        'message_group_id': {
+                            'oneOf': [
+                                {'bsonType': 'string'},
+                                {'bsonType': 'null'}
+                            ]
+                        },
+                        'message_count': {
+                            'oneOf': [
+                                {'bsonType': 'int'},
+                                {'bsonType': 'null'}
+                            ]
+                        },
+                        'message_check_time': {
+                            'oneOf': [
+                                {'bsonType': 'int'},
+                                {'bsonType': 'null'}
+                            ]
+                        },
                         'require_username': {'bsonType': 'bool'},
                         'required_groups': {'bsonType': 'array'},
                         'draw_method': {
                             'enum': ['draw_when_full', 'draw_at_time']
                         },
                         'participant_count': {'bsonType': 'int'},
-                        'draw_time': {'bsonType': 'date'},
+                        'draw_time': {
+                            'oneOf': [
+                                {'bsonType': 'date'},
+                                {'bsonType': 'null'}
+                            ]
+                        },
                         'message_count_tracked': {'bsonType': 'bool'}
                     }
                 }
