@@ -29,7 +29,9 @@ async def check_lottery_creation(context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"找不到抽奖记录: {lottery_id}")
             return
             
-        now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        now = datetime.now(timezone.utc)
+        created_at = lottery['created_at']
+        created_at = created_at.replace(tzinfo=timezone.utc)
         time_diff = (now - lottery['created_at']).total_seconds()
         
         if lottery['status'] == 'draft':
@@ -97,7 +99,8 @@ async def check_lottery_status(lottery_id: str, user_id: str) -> dict:
             
         # 计算时间差
         now = datetime.now(timezone.utc)
-        created_at = datetime.fromisoformat(lottery['created_at'])
+        created_at = lottery['created_at']
+        created_at = created_at.replace(tzinfo=timezone.utc)
         time_diff = (now - created_at).total_seconds()
         
         # 验证创建者
