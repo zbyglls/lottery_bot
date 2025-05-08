@@ -34,7 +34,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def create_lottery(user, context, chat_id):
     """创建抽奖的核心逻辑"""
     try:
-        now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        now = datetime.now(timezone.utc)
         lottery_id = str(now.timestamp()).replace('.', '')
         
         # 创建初始抽奖记录
