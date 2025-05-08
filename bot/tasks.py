@@ -39,7 +39,7 @@ async def check_lottery_draws():
                     '$lookup': {
                         'from': 'lottery_settings',
                         'localField': 'lottery_id',
-                        'foreignField': 'lottery_id',
+                        'foreignField': 'id',
                         'as': 'settings'
                     }
                 },
@@ -73,7 +73,7 @@ async def check_lottery_draws():
                     '$lookup': {
                         'from': 'lottery_settings',
                         'localField': 'lottery_id',
-                        'foreignField': 'lottery_id',
+                        'foreignField': 'id',
                         'as': 'settings'
                     }
                 },
@@ -89,7 +89,7 @@ async def check_lottery_draws():
                     '$lookup': {
                         'from': 'participants',
                         'localField': 'lottery_id',
-                        'foreignField': 'lottery_id',
+                        'foreignField': 'id',
                         'pipeline': [{'$count': 'count'}],
                         'as': 'participant_count'
                     }
@@ -165,7 +165,7 @@ async def cleanup_old_lotteries():
                 '$lookup': {
                     'from': 'lottery_settings',
                     'localField': 'lottery_id',
-                    'foreignField': 'lottery_id',
+                    'foreignField': 'id',
                     'as': 'settings'
                 }
             },
@@ -187,7 +187,7 @@ async def cleanup_old_lotteries():
                     db.participants.delete_many({'lottery_id': lottery_id}),
                     db.prizes.delete_many({'lottery_id': lottery_id}),
                     db.lottery_settings.delete_many({'lottery_id': lottery_id}),
-                    db.lotteries.delete_one({'lottery_id': lottery_id})
+                    db.lotteries.delete_one({'id': lottery_id})
                 )
                 
                 logger.info(f"已清理抽奖记录: {title} (ID: {lottery_id}, 状态: {lottery['status']})")

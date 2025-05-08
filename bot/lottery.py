@@ -16,13 +16,13 @@ async def draw_lottery(bot: Bot, lottery_id: str):
         # 获取抽奖和设置信息
         pipeline = [
             {
-                '$match': {'lottery_id': lottery_id}
+                '$match': {'id': lottery_id}
             },
             {
                 '$lookup': {
                     'from': 'lottery_settings',
                     'localField': 'lottery_id',
-                    'foreignField': 'lottery_id',
+                    'foreignField': 'id',
                     'as': 'settings'
                 }
             },
@@ -121,7 +121,7 @@ async def draw_lottery(bot: Bot, lottery_id: str):
 
         # 更新抽奖状态
         await db.lotteries.update_one(
-            {'lottery_id': lottery_id},
+            {'id': lottery_id},
             {
                 '$set': {
                     'status': 'completed',

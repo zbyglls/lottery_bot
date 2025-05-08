@@ -136,7 +136,7 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 '$lookup': {
                     'from': 'lottery_settings',
                     'localField': 'lottery_id',
-                    'foreignField': 'lottery_id',
+                    'foreignField': 'id',
                     'as': 'settings'
                 }
             },

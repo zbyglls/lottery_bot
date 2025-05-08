@@ -455,7 +455,7 @@ async def handle_keyword_participate(update: Update, context):
 
         # 检查抽奖状态
         lottery_status = await db.lotteries.find_one(
-            {'lottery_id': lottery['lottery_id']},
+            {'id': lottery['lottery_id']},
             {'status': 1}
         )
         
@@ -597,7 +597,7 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
         db = await MongoDBConnection.get_database()
         # 获取抽奖发布时间和跟踪状态
         lottery = await db.lotteries.find_one(
-            {'lottery_id': lottery_id},
+            {'id': lottery_id},
             {
                 'updated_at': 1,
                 'message_count_tracked': 1
@@ -615,7 +615,7 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
         if not message_count_tracked:
             try:
                 await db.lotteries.update_one(
-                    {'lottery_id': lottery_id},
+                    {'id': lottery_id},
                     {'$set': {'message_count_tracked': True}}
                 )
             except Exception as e:

@@ -300,7 +300,7 @@ async def create_lottery(
         db = await MongoDBConnection.get_database()
         
         # 3. 验证抽奖是否存在
-        lottery = await db.lotteries.find_one({'_id': lottery_id})
+        lottery = await db.lotteries.find_one({'id': lottery_id})
         if not lottery:
             return JSONResponse({
                 'status': 'error',

@@ -23,7 +23,7 @@ async def check_lottery_creation(context: ContextTypes.DEFAULT_TYPE):
         db = await MongoDBConnection.get_database()
         
         # 检查抽奖状态
-        lottery = await db.lotteries.find_one({'lottery_id': lottery_id})
+        lottery = await db.lotteries.find_one({'id': lottery_id})
         
         if not lottery:
             logger.error(f"找不到抽奖记录: {lottery_id}")
@@ -35,7 +35,7 @@ async def check_lottery_creation(context: ContextTypes.DEFAULT_TYPE):
         if lottery['status'] == 'draft':
             # 如果仍然是草稿状态，更新记录状态为 cancelled
             await db.lotteries.update_one(
-                {'lottery_id': lottery_id},
+                {'id': lottery_id},
                 {
                     '$set': {
                         'status': 'cancelled',
@@ -51,7 +51,7 @@ async def check_lottery_creation(context: ContextTypes.DEFAULT_TYPE):
             
         elif lottery['status'] == 'creating' and time_diff > 5400:  # 超过90分钟
             await db.lotteries.update_one(
-                {'lottery_id': lottery_id},
+                {'id': lottery_id},
                 {
                     '$set': {
                         'status': 'cancelled',
@@ -81,7 +81,7 @@ async def check_lottery_status(lottery_id: str, user_id: str) -> dict:
         
         # 检查抽奖是否存在且状态正确
         lottery = await db.lotteries.find_one(
-            {'lottery_id': lottery_id},
+            {'id': lottery_id},
             {
                 'status': 1,
                 'creator_id': 1,
@@ -117,7 +117,7 @@ async def check_lottery_status(lottery_id: str, user_id: str) -> dict:
         if time_diff > 3600 and lottery['status'] == 'draft':
             # 更新过期记录状态为 cancelled
             await db.lotteries.update_one(
-                {'lottery_id': lottery_id},
+                {'id': lottery_id},
                 {
                     '$set': {
                         'status': 'cancelled',
@@ -134,7 +134,7 @@ async def check_lottery_status(lottery_id: str, user_id: str) -> dict:
         if time_diff < 3600 and lottery['status'] == 'draft':
             # 更新状态为 creating
             await db.lotteries.update_one(
-                {'lottery_id': lottery_id},
+                {'id': lottery_id},
                 {
                     '$set': {
                         'status': 'creating',

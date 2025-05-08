@@ -92,7 +92,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         '$lookup': {
                             'from': 'lottery_settings',
                             'localField': 'lottery_id',
-                            'foreignField': 'lottery_id',
+                            'foreignField': 'id',
                             'as': 'settings'
                         }
                     },
@@ -103,7 +103,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         '$lookup': {
                             'from': 'participants',
                             'localField': 'lottery_id',
-                            'foreignField': 'lottery_id',
+                            'foreignField': 'id',
                             'pipeline': [{'$count': 'count'}],
                             'as': 'participant_count'
                         }
@@ -317,7 +317,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     return
                 # 检查抽奖状态
                 lottery_status = await db.lotteries.find_one(
-                    {'lottery_id': lottery_id},
+                    {'id': lottery_id},
                     {'status': 1}
                 )
                 if not lottery_status or lottery_status['status'] != 'active':
@@ -642,7 +642,7 @@ async def refresh_lottery_list(update: Update, context: ContextTypes.DEFAULT_TYP
                 '$lookup': {
                     'from': 'lottery_settings',
                     'localField': 'lottery_id',
-                    'foreignField': 'lottery_id',
+                    'foreignField': 'id',
                     'as': 'settings'
                 }
             },
@@ -653,7 +653,7 @@ async def refresh_lottery_list(update: Update, context: ContextTypes.DEFAULT_TYP
                 '$lookup': {
                     'from': 'participants',
                     'localField': 'lottery_id',
-                    'foreignField': 'lottery_id',
+                    'foreignField': 'id',
                     'pipeline': [{'$count': 'count'}],
                     'as': 'participant_count'
                 }
