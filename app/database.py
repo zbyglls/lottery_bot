@@ -1,156 +1,299 @@
-import sqlite3
-from utils import mark_initialized, logger
-from config import DB_PATH
+from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import IndexModel, ASCENDING, DESCENDING
+from datetime import datetime, timezone
+import pymongo
+from config import MONGO_URI, MONGO_DB
+from utils import logger, mark_initialized
+from typing import Optional, Dict, Any
 
-class DatabaseConnection:
-    """数据库连接上下文管理器"""
+class MongoDBConnection:
+    _instance = None
+    _db = None
     
-    def __init__(self, db_path=None):
-        """初始化数据库连接"""
-        self.db_path = db_path or DB_PATH
-        self.conn = None
-        self.cursor = None
+    @classmethod
+    async def get_database(cls):
+        """获取数据库连接单例"""
+        if not cls._instance:
+            try:
+                client = AsyncIOMotorClient(
+                    MONGO_URI,
+                    tls=True,
+                    tlsAllowInvalidCertificates=True,
+                    serverSelectionTimeoutMS=30000,  
+                    connectTimeoutMS=30000,
+                    socketTimeoutMS=30000,
+                    waitQueueTimeoutMS=30000,
+                    retryWrites=True,
+                    w='majority',
+                    server_api=pymongo.server_api.ServerApi(
+                        version="1", 
+                        strict=True, 
+                        deprecation_errors=True))
+                cls._db = client[MONGO_DB]
+                cls._instance = client
+                logger.info("MongoDB 连接成功")
+            except Exception as e:
+                logger.error(f"MongoDB 连接失败: {e}", exc_info=True)
+                raise
+        return cls._db
 
-    def __enter__(self):
-        """进入上下文时建立连接"""
-        try:
-            self.conn = sqlite3.connect(self.db_path)
-            self.cursor = self.conn.cursor()
-            return self.cursor
-        except sqlite3.Error as e:
-            logger.error(f"数据库连接失败: {e}", exc_info=True)
-            raise
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """退出上下文时提交或回滚并关闭连接"""
-        try:
-            if exc_type is None:
-                self.conn.commit()
-            else:
-                self.conn.rollback()
-        finally:
-            if self.cursor:
-                self.cursor.close()
-            if self.conn:
-                self.conn.close()
-
-def init_db():
-    """初始化数据库表结构"""
+async def init_db():
+    """初始化数据库集合和索引"""
     if mark_initialized('database'):
         return
         
-    with DatabaseConnection() as c:
+    try:
+        db = await MongoDBConnection.get_database()
         
-        # 抽奖表
-        c.execute('''CREATE TABLE IF NOT EXISTS lotteries
-                     (id INTEGER PRIMARY KEY ,
-                     creator_id INTEGER NOT NULL,
-                     creator_name TEXT NOT NULL,
-                     status TEXT NOT NULL,  -- draft, creating, active, completed, cancelled
-                     type TEXT NOT NULL,  -- 'normal' 或 'invite'
-                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        # 抽奖设置表
-        c.execute('''CREATE TABLE IF NOT EXISTS lottery_settings
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     lottery_id INTEGER,
-                     title TEXT NOT NULL,
-                     media_type TEXT DEFAULT NULL,     -- 图片或视频类型，'image' 或 'video'
-                     media_url TEXT,             -- 图片或视频链接字段
-                     description TEXT NOT NULL,
-                     join_method TEXT NOT NULL,  -- 'private_chat' 或 'group_keyword'
-                     keyword_group_id TEXT,
-                     keyword TEXT,
-                     message_group_id TEXT,  -- 参与者发言的群组ID
-                     message_count INTEGER DEFAULT 0,  -- 要求的发言数量
-                     message_check_time INTEGER DEFAULT 24,  -- 检查发言的时间范围(小时)
-                     require_username BOOLEAN DEFAULT 0,
-                     required_groups TEXT,        -- 需要加入的群组/频道ID，多个用逗号分隔
-                     draw_method TEXT NOT NULL,  -- 'draw_when_full' 或 'draw_at_time'
-                     participant_count INTEGER DEFAULT 1,
-                     draw_time TIMESTAMP,
-                     message_count_tracked BOOLEAN DEFAULT 0,  -- 是否已跟踪发言数量
-                     FOREIGN KEY (lottery_id) REFERENCES lotteries(id) ON DELETE CASCADE
-                     ) ''')
-        # 奖品表
-        c.execute('''CREATE TABLE IF NOT EXISTS prizes
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     lottery_id INTEGER NOT NULL,
-                     name TEXT NOT NULL,          -- 奖品名称
-                     total_count INTEGER NOT NULL, -- 奖品总数量
-                     FOREIGN KEY (lottery_id) REFERENCES lotteries(id) ON DELETE CASCADE
-                     )''')
-        # 创建中奖记录表
-        c.execute('''CREATE TABLE IF NOT EXISTS prize_winners
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     prize_id INTEGER NOT NULL,
-                     participant_id INTEGER NOT NULL,
-                     lottery_id INTEGER NOT NULL,
-                     win_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                     status TEXT DEFAULT 'pending',  -- pending, claimed, expired
-                     FOREIGN KEY (prize_id) REFERENCES prizes(id)  ON DELETE CASCADE,
-                     FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE,
-                     FOREIGN KEY (lottery_id) REFERENCES lotteries(id) ON DELETE CASCADE
-                     )''')
+        # MongoDB 集合验证规则
+        validators = {
+            'lotteries': {
+                '$jsonSchema': {
+                    'bsonType': 'object',
+                    'required': ['id', 'creator_id', 'status', 'created_at', 'updated_at'],
+                    'properties': {
+                        'id': {'bsonType': 'int'},
+                        'creator_id': {'bsonType': 'int'},
+                        'creator_name': {'bsonType': 'string'},
+                        'status': {
+                            'enum': ['draft', 'creating', 'active', 'completed', 'cancelled']
+                        },
+                        'created_at': {'bsonType': 'date'},
+                        'updated_at': {'bsonType': 'date'}
+                    }
+                }
+            },
+            'lottery_settings': {
+                '$jsonSchema': {
+                    'bsonType': 'object',
+                    'required': ['lottery_id', 'title','description','join_method', 'draw_method'],
+                    'properties': {
+                        'lottery_id': {'bsonType': 'int'},
+                        'title': {'bsonType': 'string'},
+                        'description': {'bsonType': 'string'},
+                        'media_type': {'enum': ['','image', 'video']},
+                        'media_url': {'bsonType': 'string'},
+                        'join_method': {
+                            'enum': ['private_chat', 'group_keyword', 'group_message']
+                        },
+                        'keyword_group_id': {'bsonType': 'string'},
+                        'keyword': {'bsonType': 'string'},
+                        'message_group_id': {'bsonType': 'string'},
+                        'message_count': {'bsonType': 'int'},
+                        'message_check_time': {'bsonType': 'int'},
+                        'require_username': {'bsonType': 'bool'},
+                        'required_groups': {'bsonType': 'array'},
+                        'draw_method': {
+                            'enum': ['draw_when_full', 'draw_at_time']
+                        },
+                        'participant_count': {'bsonType': 'int'},
+                        'draw_time': {'bsonType': 'date'},
+                        'message_count_tracked': {'bsonType': 'bool'}
+                    }
+                }
+            },
+            'prizes': {
+                '$jsonSchema': {
+                    'bsonType': 'object',
+                    'required': ['lottery_id', 'name', 'total_count'],
+                    'properties': {
+                        'lottery_id': {'bsonType': 'int'},
+                        'name': {'bsonType': 'string'},
+                        'total_count': {'bsonType': 'int'}
+                    }
+                }
+            },
+            'prize_winners': {
+                '$jsonSchema': {
+                    'bsonType': 'object',
+                    'required': ['prize_id', 'participant_id', 'lottery_id', 'status'],
+                    'properties': {
+                        'prize_id': {'bsonType': 'objectId'},
+                        'participant_id': {'bsonType': 'objectId'},
+                        'lottery_id': {'bsonType': 'int'},
+                        'status': {
+                            'enum': ['pending', 'claimed', 'expired']
+                        },
+                        'win_time': {'bsonType': 'date'}
+                    }
+                }
+            },
+            'participants': {
+                '$jsonSchema': {
+                    'bsonType': 'object',
+                    'required': ['lottery_id', 'user_id', 'nickname'],
+                    'properties': {
+                        'lottery_id': {'bsonType': 'int'},
+                        'user_id': {'bsonType': 'int'},
+                        'nickname': {'bsonType': 'string'},
+                        'username': {'bsonType': 'string'},
+                        'join_time': {'bsonType': 'date'}
+                    }
+                }
+            },
+            'message_counts': {
+                '$jsonSchema': {
+                    'bsonType': 'object',
+                    'required': ['lottery_id', 'user_id', 'group_id', 'message_count'],
+                    'properties': {
+                        'lottery_id': {'bsonType': 'string'},
+                        'user_id': {'bsonType': 'int'},
+                        'group_id': {'bsonType': 'string'},
+                        'message_count': {'bsonType': 'int'},
+                        'last_message_time': {'bsonType': 'date'}
+                    }
+                }
+            }
+        }
         
-        # 参与者表
-        c.execute('''CREATE TABLE IF NOT EXISTS participants
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     lottery_id INTEGER,
-                     nickname TEXT,
-                     user_id TEXT,
-                     username TEXT,
-                     status TEXT,
-                     join_time DATETIME,
-                     FOREIGN KEY (lottery_id) REFERENCES lotteries(id) ON DELETE CASCADE
-                     )''')
-        # 消息跟踪记录表
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS message_counts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                lottery_id INTEGER,
-                user_id INTEGER,
-                group_id TEXT,
-                message_count INTEGER DEFAULT 0,
-                last_message_time TIMESTAMP,
-                UNIQUE(lottery_id, user_id, group_id)
-                )""")
-        # 创建索引
-        c.execute('CREATE INDEX IF NOT EXISTS idx_lotteries_creator ON lotteries(creator_id)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_lotteries_status ON lotteries(status)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_participants_lottery ON participants(lottery_id)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_participants_user ON participants(user_id)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_prize_winners_lottery ON prize_winners(lottery_id)')
-
-        #创建触发器自动更新时间
-        c.execute('''CREATE TRIGGER IF NOT EXISTS update_lottery_timestamp
-                     AFTER UPDATE ON lotteries
-                     BEGIN
-                        UPDATE lotteries SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-                     END;''')
-
-        logger.info("数据库表结构初始化完成")
-
-def check_db():
-    """检查数据库表是否存在并验证结构完整性"""
-    with DatabaseConnection() as c:
-        try:
-            # 检查所需的表是否都存在
-            required_tables = ['lotteries', 'lottery_settings', 'prizes', 'prize_winners', 'participants']
-            c.execute("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name IN ({})
-            """.format(','.join('?' * len(required_tables))), required_tables)
+        # 创建集合
+        collections = {
+            # 抽奖表
+            'lotteries': [
+                IndexModel([('id', ASCENDING)], unique=True),
+                IndexModel([('creator_id', ASCENDING)]),
+                IndexModel([('status', ASCENDING)]),
+                IndexModel([('updated_at', DESCENDING)])
+            ],
+            # 抽奖设置表
+            'lottery_settings': [
+                IndexModel([('lottery_id', ASCENDING)], unique=True)
+            ],
+            # 奖品表
+            'prizes': [
+                IndexModel([('lottery_id', ASCENDING)])
+            ],
+            # 中奖记录表
+            'prize_winners': [
+                IndexModel([('lottery_id', ASCENDING)]),
+                IndexModel([('participant_id', ASCENDING)])
+            ],
+            # 参与者表
+            'participants': [
+                IndexModel([('lottery_id', ASCENDING)]),
+                IndexModel([('user_id', ASCENDING)]),
+                IndexModel([('lottery_id', ASCENDING), ('user_id', ASCENDING)], unique=True)
+            ],
+            # 消息跟踪记录表
+            'message_counts': [
+                IndexModel([('lottery_id', ASCENDING)]),
+                IndexModel([('user_id', ASCENDING)]),
+                IndexModel([('group_id', ASCENDING)]),
+                IndexModel([('last_message_time', DESCENDING)]),
+                IndexModel(
+                    [('lottery_id', ASCENDING), 
+                     ('user_id', ASCENDING), 
+                     ('group_id', ASCENDING)
+                    ], 
+                    unique=True
+                )
+            ]
+        }
+        
+        # 创建或更新集合和验证规则
+        for collection_name, validator in validators.items():
+            try:
+                await db.create_collection(collection_name)
+            except Exception as e:
+                if 'already exists' not in str(e):
+                    raise
+                    
+            # 设置验证规则
+            await db.command({
+                'collMod': collection_name,
+                'validator': validator,
+                'validationLevel': 'strict',
+                'validationAction': 'error'
+            })
             
-            existing_tables = set(row[0] for row in c.fetchall())
-            missing_tables = set(required_tables) - existing_tables
-            
-            if missing_tables:
-                logger.info(f"缺少以下表，开始初始化: {', '.join(missing_tables)}")
-                init_db()
-            else:
-                logger.info("数据库表结构完整，无需初始化")
+            # 应用索引
+            if collection_name in collections:
+                await db[collection_name].create_indexes(collections[collection_name])
                 
-        except sqlite3.Error as e:
-            logger.error(f"检查数据库时出错: {e}", exc_info=True)
-            raise
+        logger.info("MongoDB 集合、验证规则和索引初始化完成")
+        
+    except Exception as e:
+        logger.error(f"初始化 MongoDB 时出错: {e}", exc_info=True)
+        raise
+
+async def check_db():
+    """检查数据库集合是否存在"""
+    try:
+        db = await MongoDBConnection.get_database()
+        collections = await db.list_collection_names()
+        required_collections = ['lotteries', 'lottery_settings', 'prizes', 'prize_winners', 'participants']
+        
+        missing_collections = set(required_collections) - set(collections)
+        if missing_collections:
+            logger.info(f"缺少以下集合: {', '.join(missing_collections)}")
+            await init_db()
+        else:
+            logger.info("MongoDB 集合结构完整")
+            
+    except Exception as e:
+        logger.error(f"检查 MongoDB 时出错: {e}", exc_info=True)
+        raise
+
+# 集合模式定义（用于文档参考）
+COLLECTION_SCHEMAS = {
+    'lotteries': {
+        'id': int,
+        'creator_id': int,
+        'creator_name': str,
+        'status': str,  # draft, creating, active, completed, cancelled
+        'created_at': datetime,
+        'updated_at': datetime
+    },
+    'lottery_settings': {
+        'lottery_id': int,
+        'title': str,
+        'media_type': str,  # image or video
+        'media_url': str,
+        'description': str,
+        'join_method': str, # private_chat, group_keyword, group-message
+        'keyword_group_id': str,
+        'keyword': str,
+        'message_group_id': str,
+        'message_count': int,
+        'message_check_time': int,
+        'require_username': bool,
+        'required_groups': list,
+        'draw_method': str,  # draw_when_full, draw_at_time
+        'participant_count': int,
+        'draw_time': datetime,
+        'message_count_tracked': bool
+    },
+    'prizes': {
+        'lottery_id': int,
+        'name': str,
+        'total_count': int
+    },
+    'prize_winners': {
+        'prize_id': int,
+        'participant_id': int,
+        'lottery_id': int,
+        'win_time': datetime,
+        'status': str  # pending, claimed, expired
+    },
+    'participants': {
+        'lottery_id': int,
+        'user_id': str,
+        'nickname': str,
+        'username': str,
+        'join_time': datetime
+    },
+    'message_counts': {
+        'lottery_id': int,
+        'user_id': int,
+        'group_id': str,
+        'message_count': int,
+        'last_message_time': datetime
+    }
+}
+
+
+
+
+
+
+

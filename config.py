@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from utils import logger
 from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 
@@ -21,8 +22,9 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 YOUR_BOT = os.getenv('YOUR_BOT')
 
 
-# 数据库配置
-DB_PATH = os.path.join(BASE_DIR, 'lottery.db')
+# MongoDB 数据库配置
+MONGO_DB = os.getenv('MONGO_DB')
+MONGO_URI = os.getenv('MONGO_URI')
 
 # 媒体文件配置
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -35,3 +37,4 @@ JOB_QUEUE_WORKERS = 4  # 工作线程数
 # 域名配置
 YOUR_DOMAIN = os.getenv('YOUR_DOMAIN')
 SERVICE_URL = os.getenv('SERVICE_URL')
+

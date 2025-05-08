@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     try:
         # 检查并初始化数据库
-        check_db()
+        await check_db()
         
         # 初始化模板
         app.state.templates = templates

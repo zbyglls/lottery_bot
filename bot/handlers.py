@@ -1,7 +1,8 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import aiohttp
-from app.database import DatabaseConnection
+from app.database import MongoDBConnection
+from bson.objectid import ObjectId 
 from config import YOUR_BOT
 from utils import logger
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
@@ -257,23 +258,44 @@ async def send_batch_winner_notifications(winners: list, creator_id: str):
             return False
         creator = await bot.get_chat(creator_id)
         creator_name = creator.username
+        db = await MongoDBConnection.get_database()
         for _ in winners:
             prize_id, participant_id, lottery_id = _
-            with DatabaseConnection() as c:
-                # 获取中奖记录
-                c.execute("SELECT user_id FROM participants WHERE id = ?", (participant_id,))
-                user_id = c.fetchone()[0]
-                c.execute("SELECT name FROM prizes WHERE id = ?", (prize_id,))
-                prize_name = c.fetchone()[0]
-                c.execute("SELECT title FROM lottery_settings WHERE lottery_id = ?", (lottery_id,))
-                title = c.fetchone()[0]
-                await send_winner_notification(
-                    user_id,
-                    {'lottery_id': lottery_id, 'title': title, 'creator_name': creator_name},
-                    {'id': prize_id, 'name': prize_name}
-                )
-                # 添加延迟避免触发限制
-                await asyncio.sleep(0.1)
+            # 获取参与者信息
+            participant = await db.participants.find_one(
+                {'_id': ObjectId(participant_id)},
+                {'user_id': 1}
+            )
+            if not participant:
+                continue
+            # 获取奖品信息
+            prize = await db.prizes.find_one(
+                {'_id': ObjectId(prize_id)},
+                {'name': 1}
+            )
+            if not prize:
+                continue
+            # 获取抽奖信息
+            lottery = await db.lottery_settings.find_one(
+                {'lottery_id': lottery_id},
+                {'title': 1}
+            )
+            if not lottery:
+                continue
+            await send_winner_notification(
+                participant['user_id'],
+                {
+                    'lottery_id': lottery_id,
+                    'title': lottery['title'],
+                    'creator_name': creator_name
+                },
+                {
+                    'id': str(prize['_id']),
+                    'name': prize['name']
+                }
+            )
+            # 添加延迟避免触发限制
+            await asyncio.sleep(0.1)
 
     except Exception as e:
         logger.error(f"批量发送中奖通知时出错: {e}", exc_info=True)
@@ -291,47 +313,78 @@ async def send_lottery_result_to_group(winners: list, groups: list):
             logger.error("无法获取机器人实例")
             return False
         lottery_id = winners[0][2]  # 获取抽奖ID
-        # 获取抽奖和中奖信息
-        with DatabaseConnection() as c:
-            # 获取抽奖基本信息
-            c.execute("""
-                SELECT ls.title, ls.description,
-                       l.creator_id,
-                       (SELECT COUNT(*) FROM participants 
-                        WHERE lottery_id = ls.lottery_id) as total_participants
-                FROM lottery_settings ls
-                JOIN lotteries l ON ls.lottery_id = l.id
-                WHERE ls.lottery_id = ?
-            """, (lottery_id,))
-            lottery_info = c.fetchone()
+        db = await MongoDBConnection.get_database()
+        # 获取抽奖信息
+        pipeline = [
+            {
+                '$match': {'lottery_id': lottery_id}
+            },
+            {
+                '$lookup': {
+                    'from': 'lotteries',
+                    'localField': 'lottery_id',
+                    'foreignField': 'lottery_id',
+                    'as': 'lottery'
+                }
+            },
+            {
+                '$unwind': '$lottery'
+            },
+            {
+                '$project': {
+                    'title': 1,
+                    'description': 1,
+                    'creator_id': '$lottery.creator_id'
+                }
+            }
+        ]
+        lottery_info = await db.lottery_settings.aggregate(pipeline).to_list(1)
+        if not lottery_info:
+            logger.error(f"未找到抽奖活动: {lottery_id}")
+            return False
             
-            if not lottery_info:
-                logger.error(f"未找到抽奖活动: {lottery_id}")
-                return False
+        lottery_info = lottery_info[0]
                 
-            title, description, creator_id, total_participants = lottery_info
-            user = await bot.get_chat(creator_id)
-            creator_name = user.username
-            # 获取中奖信息
-            winns = []
-            for _ in winners:
-                prize_id, participant_id, lottery_id = _
-                c.execute("SELECT nickname, username FROM participants WHERE id = ?", (participant_id,))
-                nickname, username = c.fetchall()[0]
-                c.execute("SELECT name FROM prizes WHERE id = ?", (prize_id,))
-                prize_name = c.fetchall()[0][0]
-                winns.append((nickname, username, prize_name))
+        # 获取参与人数
+        total_participants = await db.participants.count_documents({'lottery_id': lottery_id})
+        
+        # 获取创建者信息
+        creator = await bot.get_chat(lottery_info['creator_id'])
+        creator_name = creator.username
+        # 获取中奖信息
+        winners_info = []
+        for winner in winners:
+            prize_id, participant_id, _ = winner
+            
+            # 获取参与者信息
+            participant = await db.participants.find_one(
+                {'_id': ObjectId(participant_id)},
+                {'nickname': 1, 'username': 1}
+            )
+            
+            # 获取奖品信息
+            prize = await db.prizes.find_one(
+                {'_id': ObjectId(prize_id)},
+                {'name': 1}
+            )
+            
+            if participant and prize:
+                winners_info.append((
+                    participant['nickname'],
+                    participant.get('username'),
+                    prize['name']
+                ))
 
         # 构建开奖结果消息
         message = (
             f"🎉 抽奖结果公布！\n\n"
-            f"📑 活动标题：{title}\n"
+            f"📑 活动标题：{lottery_info['title']}\n"
             f"👥 参与人数：{total_participants}\n\n"
             f"🎯 中奖名单：\n"
         )
 
         # 添加中奖者信息
-        for winner in winns:
+        for winner in winners_info:
             nickname, username, prize_name = winner
             winner_text = f"@{username}" if username else nickname
             message += f"🎁 {prize_name}：{winner_text}\n"
@@ -389,86 +442,88 @@ async def handle_keyword_participate(update: Update, context):
             return
         
         # 获取对应的抽奖活动
-        with DatabaseConnection() as c:
-            logger.info(f"查找关键词匹配: chat_id={chat_id}, keyword={message.text.strip()}")
-            c.execute("""
-                SELECT 
-                    l.id, ls.title, ls.require_username, 
-                    ls.required_groups, ls.participant_count,
-                    ls.draw_method, ls.draw_time,
-                    (SELECT COUNT(*) FROM participants 
-                     WHERE lottery_id = l.id) as current_count
-                FROM lotteries l
-                JOIN lottery_settings ls ON l.id = ls.lottery_id
-                WHERE l.status = 'active'
-                AND ls.keyword_group_id = ?
-                AND ls.keyword = ?
-            """, (str(chat_id), message.text.strip()))
-            
-            lottery = c.fetchone()
-            if not lottery:
-                return
+        db = await MongoDBConnection.get_database()
+        # 查找对应的抽奖活动
+        lottery = await db.lottery_settings.find_one({
+            'keyword_group_id': str(chat_id),
+            'keyword': message.text.strip()
+        })
+        
+        if not lottery:
+            return
 
-            lottery_id, title = lottery[0], lottery[1]
-            required_username = lottery[2]
-            required_groups = lottery[3].split(',') if lottery[3] else []
-            current_count = lottery[7]
-
-            # 检查重复参与
-            c.execute("""
-                SELECT 1 FROM participants 
-                WHERE lottery_id = ? AND user_id = ?
-            """, (lottery_id, user.id))
+        # 检查抽奖状态
+        lottery_status = await db.lotteries.find_one(
+            {'lottery_id': lottery['lottery_id']},
+            {'status': 1}
+        )
+        
+        if not lottery_status or lottery_status['status'] != 'active':
+            return
             
-            if c.fetchone():
-                await message.reply_text(
-                    "❌ 你已经参与过这个抽奖了",
-                    reply_to_message_id=message.message_id
-                )
-                return
-            
-            # 检查用户名要求
-            if required_username and not user.username:
-                await message.reply_text(
-                    "❌ 参与失败：请先设置用户名后再参与抽奖",
-                    reply_to_message_id=message.message_id
-                )
-                return
-            
-            # 检查群组要求
-            for group_id in required_groups:
-                if group_id and group_id.strip():
-                    try:
-                        member = await context.bot.get_chat_member(group_id, user.id)
-                        if member.status not in ['member', 'administrator', 'creator']:
-                            chat = await context.bot.get_chat(group_id)
-                            await message.reply_text(
-                                f"❌ 参与失败：请先加入群组 {chat.title}",
-                                reply_to_message_id=message.message_id
-                            )
-                            return
-                    except Exception as e:
-                        logger.error(f"检查用户群组成员状态时出错: {e}")
-                        continue
-
-            # 添加参与记录
-            c.execute("""
-                INSERT INTO participants (
-                    lottery_id, user_id, nickname, username,
-                    join_time, status
-                ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')
-            """, (lottery_id, user.id, user.full_name, user.username))
-            
-            # 发送参与成功提示
+        # 检查重复参与
+        existing = await db.participants.find_one({
+            'lottery_id': lottery['lottery_id'],
+            'user_id': user.id
+        })
+        
+        if existing:
             await message.reply_text(
-                f"✅ 参与成功！\n\n"
-                f"🎲 抽奖活动：{title}\n"
-                f"👥 当前参与人数：{current_count + 1}\n\n"
-                f"🔔 开奖后会通过机器人私信通知",
+                "❌ 你已经参与过这个抽奖了",
                 reply_to_message_id=message.message_id
             )
+            return
             
-            logger.info(f"用户 {user.full_name} (ID: {user.id}) 成功参与抽奖 {title}")
+        # 检查用户名要求
+        required_username = lottery.get('require_username', False)
+        if required_username and not user.username:
+            await message.reply_text(
+                "❌ 参与失败：请先设置用户名后再参与抽奖",
+                reply_to_message_id=message.message_id
+            )
+            return
+            
+        # 检查群组要求
+        required_groups = lottery.get('required_groups', '').split(',')
+        for group_id in required_groups:
+            if group_id and group_id.strip():
+                try:
+                    member = await context.bot.get_chat_member(group_id, user.id)
+                    if member.status not in ['member', 'administrator', 'creator']:
+                        chat = await context.bot.get_chat(group_id)
+                        await message.reply_text(
+                            f"❌ 参与失败：请先加入群组 {chat.title}",
+                            reply_to_message_id=message.message_id
+                        )
+                        return
+                except Exception as e:
+                    logger.error(f"检查用户群组成员状态时出错: {e}")
+                    continue
+
+        # 添加参与记录
+        now = datetime.now(timezone.utc)
+        await db.participants.insert_one({
+            'lottery_id': lottery['lottery_id'],
+            'user_id': user.id,
+            'nickname': user.full_name,
+            'username': user.username,
+            'join_time': now,
+            'created_at': now
+        })
+            
+        # 发送参与成功提示
+        current_count = await db.participants.count_documents({
+            'lottery_id': lottery['lottery_id']
+        })
+        await message.reply_text(
+            f"✅ 参与成功！\n\n"
+            f"🎲 抽奖活动：{lottery['title']}\n"
+            f"👥 当前参与人数：{current_count}\n\n"
+            f"🔔 开奖后会通过机器人私信通知",
+            reply_to_message_id=message.message_id
+        )
+            
+        logger.info(f"用户 {user.full_name} (ID: {user.id}) 成功参与抽奖 {lottery['title']}")
 
     except Exception as e:
         logger.error(f"处理关键词参与抽奖时出错: {e}", exc_info=True)
@@ -538,82 +593,84 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
         bool: 是否满足发言要求
     """
     try:
-        # 获取抽奖发布时间
-        with DatabaseConnection() as c:
-            c.execute("""
-                SELECT l.updated_at, ls.message_count_tracked
-                FROM lotteries l
-                LEFT JOIN lottery_settings ls ON l.id = ls.lottery_id
-                WHERE l.id = ?
-            """, (lottery_id,))
-            result = c.fetchone()
+        db = await MongoDBConnection.get_database()
+        # 获取抽奖发布时间和跟踪状态
+        lottery = await db.lotteries.find_one(
+            {'lottery_id': lottery_id},
+            {
+                'updated_at': 1,
+                'message_count_tracked': 1
+            }
+        )
             
-            if not result:
-                return False
+        if not lottery:
+            logger.error(f"未找到抽奖 {lottery_id}")
+            return False
             
-            publish_time = datetime.strptime(result[0], '%Y-%m-%d %H:%M:%S')
-            message_count_tracked = result[1] or False
+        publish_time = lottery.get('updated_at')
+        message_count_tracked = lottery.get('message_count_tracked', False)
 
         # 如果还没有开始跟踪消息，创建消息跟踪记录
         if not message_count_tracked:
             try:
-                with DatabaseConnection() as c:
-                    # 更新抽奖设置，标记已开始跟踪
-                    c.execute("""
-                        UPDATE lottery_settings 
-                        SET message_count_tracked = 1 
-                        WHERE lottery_id = ?
-                    """, (lottery_id,))
+                await db.lotteries.update_one(
+                    {'lottery_id': lottery_id},
+                    {'$set': {'message_count_tracked': True}}
+                )
             except Exception as e:
                 logger.error(f"创建消息计数表时出错: {e}")
                 return False
 
-        # 检查用户当前消息
+        # 检查当前消息
         current_message = update.message if update else None
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
 
         # 获取用户现有的消息计数
-        with DatabaseConnection() as c:
-            c.execute("""
-                SELECT message_count, last_message_time 
-                FROM message_counts 
-                WHERE lottery_id = ? AND user_id = ? AND group_id = ?
-            """, (lottery_id, user_id, group_id))
-            result = c.fetchone()
+        message_record = await db.message_counts.find_one({
+            'lottery_id': lottery_id,
+            'user_id': user_id,
+            'group_id': group_id
+        })
 
-            if result:
-                message_count, last_message_time = result
-                last_message_time = datetime.strptime(last_message_time.split('.')[0], '%Y-%m-%d %H:%M:%S')
-            else:
-                message_count = 0
-                last_message_time = publish_time
+        if message_record:
+            message_count = message_record.get('message_count', 0)
+            last_message_time = message_record.get('last_message_time', publish_time)
+        else:
+            message_count = 0
+            last_message_time = publish_time
 
-            # 如果有新消息且是文本消息，增加计数
-            if (current_message and 
-                current_message.text and 
-                current_message.chat.id == int(group_id) and 
-                current_message.from_user.id == user_id):
+        # 如果有新消息且是文本消息，增加计数
+        if (current_message and 
+            current_message.text and 
+            current_message.chat.id == int(group_id) and 
+            current_message.from_user.id == user_id):
                 
-                # 检查消息时间是否在有效期内
-                check_start_time = current_time - timedelta(hours=check_hours)
-                if current_time >= check_start_time:
-                    current_time = current_time.strftime('%Y-%m-%d %H:%M:%S')
-                    message_count += 1
-                    logger.info(f"用户 {user_id} 新增一条有效消息，当前数量: {message_count}")
+            # 检查消息时间是否在有效期内
+            check_start_time = current_time - timedelta(hours=check_hours)
+            if current_time >= check_start_time:
+                current_time = current_time.strftime('%Y-%m-%d %H:%M:%S')
+                message_count += 1
+                logger.info(f"用户 {user_id} 新增一条有效消息，当前数量: {message_count}")
 
-                    # 更新数据库
-                    c.execute("""
-                        INSERT INTO message_counts 
-                        (lottery_id, user_id, group_id, message_count, last_message_time)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(lottery_id, user_id, group_id) 
-                        DO UPDATE SET 
-                            message_count = ?,
-                            last_message_time = ?
-                    """, (
-                        lottery_id, user_id, group_id, message_count, current_time,
-                        message_count, current_time
-                    ))
+                # 更新或插入消息计数
+                await db.message_counts.update_one(
+                    {
+                        'lottery_id': lottery_id,
+                        'user_id': user_id,
+                        'group_id': group_id
+                    },
+                    {
+                        '$set': {
+                            'message_count': message_count,
+                            'last_message_time': current_time,
+                            'updated_at': current_time
+                        },
+                        '$setOnInsert': {
+                            'created_at': current_time
+                        }
+                    },
+                    upsert=True
+                )
 
             # 检查是否达到要求
             if message_count >= required_count:
@@ -643,83 +700,108 @@ async def handle_message_count_participate(update: Update, context):
             return
             
         # 获取该群组的发言要求抽奖
-        with DatabaseConnection() as c:
-            c.execute("""
-                SELECT 
-                    l.id, ls.title, ls.require_username, 
-                    ls.required_groups, ls.participant_count,
-                    ls.message_count, ls.message_check_time,
-                    (SELECT COUNT(*) FROM participants WHERE lottery_id = l.id) as current_count
-                FROM lotteries l
-                JOIN lottery_settings ls ON l.id = ls.lottery_id
-                WHERE l.status = 'active'
-                AND ls.message_group_id = ?
-                AND ls.message_count > 0
-            """, (str(chat_id),))
+        db = await MongoDBConnection.get_database()
+        pipeline = [
+            {
+                '$match': {
+                    'message_group_id': str(chat_id),
+                    'message_count': {'$gt': 0}
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'lotteries',
+                    'localField': 'lottery_id',
+                    'foreignField': 'lottery_id',
+                    'as': 'lottery'
+                }
+            },
+            {
+                '$unwind': '$lottery'
+            },
+            {
+                '$match': {
+                    'lottery.status': 'active'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'participants',
+                    'localField': 'lottery_id',
+                    'foreignField': 'lottery_id',
+                    'pipeline': [{'$count': 'count'}],
+                    'as': 'participant_count'
+                }
+            }
+        ]
             
-            lottery = c.fetchone()
-            if not lottery:
-                return
-            logger.info(f"找到发言数量参与的抽奖活动: {lottery}")
-            lottery_id, title = lottery[0], lottery[1]
-            required_username = lottery[2]
-            required_groups = lottery[3].split(',') if lottery[3] else []
-            message_count = lottery[5]
-            message_check_time = lottery[6]
-            current_count = lottery[7]
+        lotteries = await db.lottery_settings.aggregate(pipeline).to_list(None)
+        if not lotteries:
+            return
+        for lottery in lotteries:
+            lottery_id = lottery['lottery_id']
+            title = lottery['title']
+            logger.info(f"找到发言数量参与的抽奖活动: {title}")
 
             # 检查重复参与
-            c.execute("""
-                SELECT 1 FROM participants 
-                WHERE lottery_id = ? AND user_id = ?
-            """, (lottery_id, user.id))
+            existing = await db.participants.find_one({
+                'lottery_id': lottery_id,
+                'user_id': user.id
+            })
             
-            if c.fetchone():
+            if existing:
                 logger.info(f"用户 {user.full_name} (ID: {user.id}) 已参与过抽奖 {title}")
                 return
             # 检查用户名要求
-            if required_username and not user.username:
+            if lottery.get('require_username') and not user.username:
                 await message.reply_text(
                     "❌ 参与失败：请先设置用户名后再参与抽奖",
                     reply_to_message_id=message.message_id
                 )
                 return
             # 检查群组要求
-            for group_id in required_groups:
-                if not group_id:
-                    continue
-                try:
-                    member = await context.bot.get_chat_member(group_id, user.id)
-                    if member.status not in ['member', 'administrator', 'creator']:
-                        chat = await context.bot.get_chat(group_id)
-                        await message.reply_text(
-                            f"❌ 参与失败：请先加入群组 {chat.title}",
-                            reply_to_message_id=message.message_id
-                        )
-                        return
-                except Exception as e:
-                    logger.error(f"检查用户群组成员状态时出错: {e}")
-                    continue
+            if lottery.get('required_groups'):
+                for group_id in lottery['required_groups']:
+                    if not group_id:
+                        continue
+                    try:
+                        member = await context.bot.get_chat_member(group_id, user.id)
+                        if member.status not in ['member', 'administrator', 'creator']:
+                            chat = await context.bot.get_chat(group_id)
+                            await message.reply_text(
+                                f"❌ 参与失败：请先加入群组 {chat.title}",
+                                reply_to_message_id=message.message_id
+                            )
+                            return
+                    except Exception as e:
+                        logger.error(f"检查用户群组成员状态时出错: {e}")
+                        continue
 
             # 检查发言数量
             if not await check_user_messages(
                 context.bot,
                 user.id,
                 chat_id,
-                message_count,
-                message_check_time,
+                lottery['message_count'],
+                lottery['message_check_time'],
                 lottery_id,
                 update
             ):
                 return
 
             # 添加参与记录
-            c.execute("""
-                INSERT INTO participants (
-                    lottery_id, user_id, nickname, username,
-                    join_time, status
-                ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')
-            """, (lottery_id, user.id, user.full_name, user.username))
+            now = datetime.now(timezone.utc)
+            await db.participants.insert_one({
+                'lottery_id': lottery_id,
+                'user_id': user.id,
+                'nickname': user.full_name,
+                'username': user.username,
+                'join_time': now,
+                'created_at': now
+            })
+            
+            # 获取当前参与人数
+            current_count = lottery['participant_count'][0]['count'] if lottery['participant_count'] else 0
             
             # 发送参与成功提示
             await message.reply_text(
@@ -732,10 +814,11 @@ async def handle_message_count_participate(update: Update, context):
             
             logger.info(f"用户 {user.full_name} (ID: {user.id}) 成功参与抽奖 {title}")
             # 清除该用户的消息记录数据
-            c.execute("""
-                DELETE FROM message_counts 
-                WHERE lottery_id = ? AND user_id = ? AND group_id = ?
-            """, (lottery_id, user.id, chat_id))
+            await db.message_counts.delete_one({
+                'lottery_id': lottery_id,
+                'user_id': user.id,
+                'group_id': chat_id
+            })
             
     except Exception as e:
         logger.error(f"处理发言数量参与抽奖时出错: {e}", exc_info=True)

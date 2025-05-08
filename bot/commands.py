@@ -1,5 +1,5 @@
-from datetime import datetime
-from app.database import DatabaseConnection
+from datetime import datetime, timezone
+from app.database import MongoDBConnection
 from bot.callbacks import verify_follow
 from utils import logger
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -33,19 +33,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def create_lottery(user, context, chat_id):
     """创建抽奖的核心逻辑"""
     try:
-        created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        lottery_id = str(datetime.now().timestamp()).replace('.', '')
+        now = datetime.now(timezone.utc)
+        lottery_id = str(now.timestamp()).replace('.', '')
         
         # 创建初始抽奖记录
-        with DatabaseConnection() as conn:
-            conn.execute("""
-                INSERT INTO lotteries (
-                    id, creator_id, creator_name, status, type, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                lottery_id, user.id, user.first_name, 'draft', 'normal', created_at, created_at
-            ))
-            logger.info(f"成功插入抽奖记录，ID 为 {lottery_id}")
+        db = await MongoDBConnection.get_database()
+        lottery_doc = {
+            'lottery_id': lottery_id,
+            'creator_id': user.id,
+            'creator_name': user.first_name,
+            'status': 'draft',
+            'created_at': now,
+            'updated_at': now
+        }
+        await db.lotteries.insert_one(lottery_doc)
+        logger.info(f"成功插入抽奖记录，ID 为 {lottery_id}")
             
         # 构建创建链接
         create_url = f"{YOUR_DOMAIN}/?lottery_id={lottery_id}&user_id={user.id}"
@@ -108,6 +110,7 @@ async def new_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # 用户已关注频道，继续创建抽奖
+        from bot.callbacks import verify_follow
         await create_lottery(user, context, update.message.chat_id)
         
     except Exception as e:
@@ -121,15 +124,32 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
         # 从数据库获取用户创建的抽奖列表
-        with DatabaseConnection() as conn: 
-            conn.execute("""
-                SELECT lotteries.id, lottery_settings.title, lotteries.status, lotteries.created_at 
-                FROM lotteries , lottery_settings 
-                WHERE lotteries.id=lottery_settings.lottery_id and lotteries.creator_id = ? 
-                ORDER BY lotteries.created_at DESC 
-                LIMIT 5
-            """, (user.id,))
-            lotteries = conn.fetchall()
+        db = await MongoDBConnection.get_database() 
+        pipeline = [
+            {
+                '$match': {
+                    'creator_id': user.id
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'lottery_settings',
+                    'localField': 'lottery_id',
+                    'foreignField': 'lottery_id',
+                    'as': 'settings'
+                }
+            },
+            {
+                '$unwind': '$settings'
+            },
+            {
+                '$sort': {'created_at': -1}
+            },
+            {
+                '$limit': 5
+            }
+        ]
+        lotteries = await db.lotteries.aggregate(pipeline).to_list(length=None)
 
         if not lotteries:
             await update.message.reply_text("你还没有创建过抽奖活动。")
@@ -137,11 +157,11 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # 构建抽奖列表消息
         message = "📋 你创建的最近抽奖活动：\n\n"
-        for lottery_id, title, status, created_at in lotteries:
-            message += f"🎲 {title}\n"
-            message += f"状态: {status}\n"
-            message += f"创建时间: {created_at}\n"
-            message += f"管理链接: {YOUR_DOMAIN}/?lottery_id={lottery_id}&user_id={user.id}\n\n"
+        for lottery in lotteries:
+            message += f"🎲 {lottery['settings']['title']}\n"
+            message += f"状态: {lottery['settings']['status']}\n"
+            message += f"创建时间: {lottery['settings']['created_at']}\n"
+            message += f"管理链接: {YOUR_DOMAIN}/?lottery_id={lottery['lottery_id']}&user_id={user.id}\n\n"
 
         await update.message.reply_text(message)
     except Exception as e:

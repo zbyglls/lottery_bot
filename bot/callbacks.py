@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
-from app.database import DatabaseConnection
+from app.database import MongoDBConnection
 from bot.handlers import check_keyword_message, check_user_messages, handle_media
 from config import YOUR_BOT
 from utils import logger
@@ -40,6 +40,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     try:
         # 解析回调数据
+        db = await MongoDBConnection.get_database()
         callback_data = query.data
         if callback_data.startswith('cancel_lottery_'):
             # 处理取消创建抽奖
@@ -47,33 +48,33 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             logger.info(f"用户 {query.from_user.id} 请求取消创建抽奖 {lottery_id}")
             
             try:
-                with DatabaseConnection() as conn:
-                    # 检查抽奖状态
-                    conn.execute("""
-                        SELECT status, creator_id 
-                        FROM lotteries 
-                        WHERE id = ?
-                    """, (lottery_id,))
-                    result = conn.fetchone()
+                # 检查抽奖状态
+                lottery = await db.lotteries.find_one({'id': lottery_id})
                     
-                    if not result:
-                        await query.message.edit_text("❌ 抽奖记录不存在")
-                        return
+                if not lottery:
+                    await query.message.edit_text("❌ 抽奖记录不存在")
+                    return
                         
-                    status, creator_id = result
+                # 验证操作权限
+                if lottery['creator_id'] != query.from_user.id:
+                    await query.message.edit_text("⚠️ 你没有权限取消这个抽奖")
+                    return
                     
-                    # 验证操作权限
-                    if creator_id != query.from_user.id:
-                        await query.message.edit_text("⚠️ 你没有权限取消这个抽奖")
-                        return
+                # 更新抽奖状态
+                result = await db.lotteries.update_one(
+                    {'id': lottery_id},
+                    {'$set': {
+                        'status': 'cancelled',
+                        'updated_at': datetime.now(timezone.utc)
+                    }}
+                )
                     
-                    # 删除抽奖记录
-                    conn.execute("UPDATE lotteries SET status = 'cancelled' WHERE id = ?", (lottery_id,))
-
-                    
-                    # 更新消息
+                # 更新消息
+                if result.modified_count > 0:
                     await query.message.edit_text("✅ 抽奖创建已取消")
                     logger.info(f"抽奖 {lottery_id} 已被用户取消")
+                else:
+                    await query.message.edit_text("❌ 取消抽奖失败，请重试")
                     
             except Exception as e:
                 logger.error(f"取消抽奖时数据库错误: {e}", exc_info=True)
@@ -82,61 +83,82 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         elif callback_data == 'view_lotteries':
             # 处理查看抽奖列表
             try:
-                with DatabaseConnection() as conn:
-                    conn.execute("""
-                        SELECT l.id, l.status, ls.title, ls.draw_method, 
-                               ls.participant_count, ls.draw_time,
-                               (SELECT COUNT(*) FROM participants p WHERE p.lottery_id = l.id) as current_count
-                        FROM lotteries l
-                        JOIN lottery_settings ls ON l.id = ls.lottery_id
-                        WHERE l.status = 'active'
-                        ORDER BY l.created_at DESC
-                        LIMIT 10
-                    """)
-                    active_lotteries = conn.fetchall()
+                pipeline = [
+                    {
+                        '$match': {'status': 'active'}
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'lottery_settings',
+                            'localField': 'lottery_id',
+                            'foreignField': 'lottery_id',
+                            'as': 'settings'
+                        }
+                    },
+                    {
+                        '$unwind': '$settings'
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'participants',
+                            'localField': 'lottery_id',
+                            'foreignField': 'lottery_id',
+                            'pipeline': [{'$count': 'count'}],
+                            'as': 'participant_count'
+                        }
+                    },
+                    {
+                        '$sort': {'created_at': -1}
+                    },
+                    {
+                        '$limit': 10
+                    }
+                ]
+                active_lotteries = await db.lotteries.aggregate(pipeline).to_list(None)
 
-                    if not active_lotteries:
-                        await query.message.edit_text(
-                            "😔 目前没有正在进行的抽奖活动\n",
-                            parse_mode='HTML'
-                        )
-                        return
-
-                    message = "🎲 <b>当前进行中的抽奖活动</b>\n\n"
-                    keyboard = []
-
-                    for lottery in active_lotteries:
-                        lottery_id, status, title, draw_method, max_participants, draw_time, current_count = lottery
-                        
-                        # 处理开奖方式显示
-                        if draw_method == 'draw_when_full':
-                            draw_info = f"👥 {current_count}/{max_participants}人"
-                        else:
-                            draw_info = f"⏰ {draw_time}"
-
-                        message += (
-                            f"📌 <b>{title}</b>\n"
-                            f"📊 {draw_info}\n\n"
-                        )
-
-                        # 添加参与按钮
-                        keyboard.append([
-                            InlineKeyboardButton(
-                                f"参与 {title}", 
-                                callback_data=f'join_{lottery_id}'
-                            )
-                        ])
-
-                    # 添加返回按钮
-                    keyboard.append([
-                        InlineKeyboardButton("🔙 返回", callback_data='back_to_main')
-                    ])
-
+                if not active_lotteries:
                     await query.message.edit_text(
-                        message,
-                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        "😔 目前没有正在进行的抽奖活动\n",
                         parse_mode='HTML'
                     )
+                    return
+
+                message = "🎲 <b>当前进行中的抽奖活动</b>\n\n"
+                keyboard = []
+
+                for lottery in active_lotteries:
+                    current_count = lottery['participant_count'][0]['count'] if lottery['participant_count'] else 0
+                    settings = lottery['settings']  
+
+                    # 处理开奖方式显示
+                    if settings['draw_method'] == 'draw_when_full':
+                        draw_info = f"👥 {current_count}/{settings['max_participants']}人"
+                    else:
+                        draw_info = f"⏰ {settings['draw_time']}"
+
+                    message += (
+                        f"📌 <b>{settings['title']}</b>\n"
+                        f"📊 {draw_info}\n\n"
+                    )
+
+                    # 添加参与按钮
+                    keyboard.append([
+                        InlineKeyboardButton(
+                            f"参与 {settings['title']}", 
+                            callback_data=f'join_{lottery["lottery_id"]}'
+                        )
+                    ])
+
+                # 添加返回按钮
+                keyboard.append([
+                    InlineKeyboardButton("🔙 返回", callback_data='back_to_main')
+                ])
+
+                await query.message.edit_text(
+                    message,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='HTML'
+                )
 
             except Exception as e:
                 logger.error(f"获取抽奖列表时出错: {e}", exc_info=True)
@@ -165,64 +187,104 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             # 处理查看我的记录
             try:
                 user_id = query.from_user.id
-                with DatabaseConnection() as conn:
+                db = await MongoDBConnection.get_database()
                     
-                    # 获取参与记录
-                    conn.execute("""
-                        SELECT l.id, ls.title, p.status, p.join_time,
-                               CASE 
-                                   WHEN pw.id IS NOT NULL THEN pr.name
-                                   ELSE NULL
-                               END as prize_name
-                        FROM participants p
-                        JOIN lotteries l ON p.lottery_id = l.id
-                        JOIN lottery_settings ls ON l.id = ls.lottery_id
-                        LEFT JOIN prize_winners pw ON p.id = pw.participant_id
-                        LEFT JOIN prizes pr ON pw.prize_id = pr.id
-                        WHERE p.user_id = ?
-                        ORDER BY p.join_time DESC
-                        LIMIT 10
-                    """, (user_id,))
-                    records = conn.fetchall()
+                # 获取参与记录
+                pipeline = [
+                    {
+                        '$match': {
+                            'user_id': user_id
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'lotteries',
+                            'localField': 'lottery_id',
+                            'foreignField': 'lottery_id',
+                            'as': 'lottery'
+                        }
+                    },
+                    {
+                        '$unwind': '$lottery'
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'lottery_settings',
+                            'localField': 'lottery_id',
+                            'foreignField': 'lottery_id',
+                            'as': 'settings'
+                        }
+                    },
+                    {
+                        '$unwind': '$settings'
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'prize_winners',
+                            'localField': '_id',
+                            'foreignField': 'participant_id',
+                            'as': 'winner'
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'prizes',
+                            'localField': 'winner.prize_id',
+                            'foreignField': '_id',
+                            'as': 'prize'
+                        }
+                    },
+                    {
+                        '$sort': {'join_time': -1}
+                    },
+                    {
+                        '$limit': 10
+                    }
+                ]
+                records = await db.participants.aggregate(pipeline).to_list(None)
 
-                    if not records:
-                        await query.message.edit_text(
-                            "😔 你还没有参与过任何抽奖\n"
-                            "点击下方按钮查看可参与的抽奖活动",
-                            reply_markup=InlineKeyboardMarkup([[
-                                InlineKeyboardButton("👀 查看抽奖活动", callback_data='view_lotteries'),
-                                InlineKeyboardButton("🔙 返回", callback_data='back_to_main')
-                            ]])
-                        )
-                        return
-
-                    message = "🎯 <b>我的抽奖记录</b>\n\n"
-                    for lottery_id, title, status, join_time, prize_name in records:
-                        status_emoji = {
-                            'active': '⏳',
-                            'won': '🎉',
-                            'lost': '💔'
-                        }.get(status, '❓')
-
-                        prize_info = f"🎁 中奖：{prize_name}" if prize_name else ""
-                        message += (
-                            f"📌 <b>{title}</b>\n"
-                            f"{status_emoji} 状态：{status}\n"
-                            f"⏰ 参与时间：{join_time}\n"
-                            f"{prize_info}\n\n"
-                        )
-
-                    # 添加导航按钮
-                    keyboard = [
-                        [InlineKeyboardButton("👀 查看更多抽奖", callback_data='view_lotteries')],
-                        [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')]
-                    ]
-
+                if not records:
                     await query.message.edit_text(
-                        message,
-                        reply_markup=InlineKeyboardMarkup(keyboard),
-                        parse_mode='HTML'
+                        "😔 你还没有参与过任何抽奖\n"
+                        "点击下方按钮查看可参与的抽奖活动",
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("👀 查看抽奖活动", callback_data='view_lotteries'),
+                            InlineKeyboardButton("🔙 返回", callback_data='back_to_main')
+                        ]])
                     )
+                    return
+
+                message = "🎯 <b>我的抽奖记录</b>\n\n"
+                for record in records:
+                    status_emoji = {
+                        'active': '⏳',
+                        'won': '🎉',
+                        'lost': '💔'
+                    }.get(record['status'], '❓')
+
+                    prize_info = ""
+                    if record.get('prize'):
+                        prize = record['prize'][0]
+                        prize_info = f"🎁 奖品：{prize['name']}"
+
+                    message += (
+                        f"📌 <b>{record['settings']['title']}</b>\n"
+                        f"{status_emoji} 状态：{record['status']}\n"
+                        f"⏰ 参与时间：{record['join_time'].strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        f"{prize_info}\n\n"
+                    )
+
+                # 添加导航按钮
+                keyboard = [
+                    [InlineKeyboardButton("👀 查看更多抽奖", callback_data='view_lotteries')],
+                    [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')]
+                ]
+
+                await query.message.edit_text(
+                    message,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='HTML'
+                )
             except Exception as e:
                 logger.error(f"获取参与记录时出错: {e}", exc_info=True)
                 await query.message.edit_text("❌ 获取参与记录失败，请稍后重试")
@@ -232,124 +294,140 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 lottery_id = callback_data.split('_')[1]
                 user = query.from_user
 
-                # 检查抽奖信息
-                with DatabaseConnection() as conn:
-                    conn.execute("""
-                        SELECT ls.title, ls.require_username, ls.required_groups, ls.keyword_group_id, ls.keyword,
-                               ls.message_group_id, ls.message_count, ls.message_check_time,
-                               ls.participant_count, l.status,
-                               (SELECT COUNT(*) FROM participants WHERE lottery_id = l.id) as current_count
-                        FROM lottery_settings ls
-                        JOIN lotteries l ON ls.lottery_id = l.id
-                        WHERE l.id = ?
-                    """, (lottery_id,))
-                    result = conn.fetchone()
+                # 获取抽奖信息
+                db = await MongoDBConnection.get_database()
+                lottery = await db.lottery_settings.find_one(
+                    {'lottery_id': lottery_id},
+                    {
+                        'title': 1,
+                        'require_username': 1,
+                        'required_groups': 1,
+                        'keyword_group_id': 1,
+                        'keyword': 1,
+                        'message_group_id': 1,
+                        'message_count': 1,
+                        'message_check_time': 1,
+                        'participant_count': 1
+                    }
+                )
 
-                    if not result:
-                        await query.message.edit_text("❌ 抽奖活动不存在")
+                if not lottery:
+                    await query.message.edit_text("❌ 抽奖活动不存在")
+                    return
+                # 检查抽奖状态
+                lottery_status = await db.lotteries.find_one(
+                    {'lottery_id': lottery_id},
+                    {'status': 1}
+                )
+                if not lottery_status or lottery_status['status'] != 'active':
+                    await query.message.edit_text("❌ 该抽奖活动已结束或暂停")
+                    return
+
+                # 检查是否已参与
+                participant = await db.participants.find_one({
+                    'lottery_id': lottery_id,
+                    'user_id': user.id
+                })
+                if participant:
+                    await query.message.edit_text("❌ 你已经参与过这个抽奖了")
+                    return
+
+                # 检查人数限制
+                current_count = await db.participants.count_documents({
+                    'lottery_id': lottery_id
+                })
+                if current_count >= lottery['participant_count']:
+                    await query.message.edit_text("❌ 抽奖参与人数已满")
+                    return
+
+                # 检查用户名要求
+                if lottery['require_username'] and not user.username:
+                    await query.message.reply_text("❌ 参与此抽奖需要设置用户名")
+                    return
+
+                # 检查群组要求
+                if lottery['required_groups']:
+                    for group_id in lottery['required_groups']:
+                        try:
+                            member = await context.bot.get_chat_member(group_id, user.id)
+                            if member.status in ['left', 'kicked', 'restricted']:
+                                chat = await context.bot.get_chat(group_id)
+                                keyboard = [[InlineKeyboardButton(
+                                    "👉 加入群组",
+                                    url=f"https://t.me/{chat.username}"
+                                )]]
+                                await query.message.reply_text(
+                                    f"❌ 需要先加入群组 {chat.title}",
+                                    reply_markup=InlineKeyboardMarkup(keyboard)
+                                )
+                                return
+                        except Exception as e:
+                            logger.error(f"检查群组成员状态时出错: {e}")
+                            continue
+                # 检查关键词要求
+                if lottery.get('keyword_group_id') and lottery.get('keyword'):
+                    if not await check_keyword_message(
+                        context.bot, 
+                        user.id, 
+                        lottery['keyword_group_id'], 
+                        lottery['keyword']
+                    ):
+                        chat = await context.bot.get_chat(lottery['keyword_group_id'])
+                        await query.message.reply_text(
+                            f"❌ 请先在群组 {chat.title} 中发送关键词：{lottery['keyword']}"
+                        )
                         return
-
-                    title, require_username, required_groups, keyword_group_id, keyword, message_group_id, message_count, message_check_time, max_participants, status, current_count = result
-
-                    # 检查抽奖状态
-                    if status != 'active':
-                        await query.message.edit_text("❌ 该抽奖活动已结束或暂停")
-                        return
-
-                    # 检查是否已参与
-                    conn.execute("""
-                        SELECT id FROM participants 
-                        WHERE lottery_id = ? AND user_id = ?
-                    """, (lottery_id, user.id))
-                    if conn.fetchone():
-                        await query.message.edit_text("❌ 你已经参与过这个抽奖了")
-                        return
-
-                    # 检查人数限制
-                    if current_count >= max_participants:
-                        await query.message.edit_text("❌ 抽奖参与人数已满")
-                        return
-
-                    # 检查用户名要求
-                    if require_username and not user.username:
-                        await query.message.reply_text("❌ 参与此抽奖需要设置用户名")
-                        return
-
-                    # 检查群组要求
-                    if required_groups:
-                        groups = required_groups.split(',')
-                        for group_id in groups:
-                            try:
-                                member = await context.bot.get_chat_member(group_id, user.id)
-                                if member.status in ['left', 'kicked', 'restricted']:
-                                    chat = await context.bot.get_chat(group_id)
-                                    keyboard = [[InlineKeyboardButton(
-                                        "👉 加入群组",
-                                        url=f"https://t.me/{chat.username}"
-                                    )]]
-                                    await query.message.reply_text(
-                                        f"❌ 需要先加入群组 {chat.title}",
-                                        reply_markup=InlineKeyboardMarkup(keyboard)
-                                    )
-                                    return
-                            except Exception as e:
-                                logger.error(f"检查群组成员状态时出错: {e}")
-                                continue
-                    # 检查关键词要求
-                    if keyword_group_id and keyword:
-                        if not await check_keyword_message(context.bot, user.id, keyword_group_id, keyword):
-                            chat = await context.bot.get_chat(keyword_group_id)
-                            await query.message.reply_text(
-                                f"❌ 请先在群组 {chat.title} 中发送关键词：{keyword}"
-                            )
-                            return
                         
-                    # 检查发言要求
-                    if message_group_id and message_count and message_check_time:
-                        if not await check_user_messages(
-                            context.bot,
-                            user.id,
-                            message_group_id,
-                            message_count,
-                            message_check_time
-                        ):
-                            chat = await context.bot.get_chat(message_group_id)
-                            await query.message.reply_text(
-                                f"❌ 需要在群组 {chat.title} 中最近 {message_check_time} 小时内发言 {message_count} 条\n"
-                                "💡 提示：只统计文本消息"
-                            )
-                            return
-                    # 添加参与记录
-                    join_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    conn.execute("""
-                        INSERT INTO participants (
-                            lottery_id, user_id, nickname, username, 
-                            status, join_time
-                        ) VALUES (?, ?, ?, ?, ?, ?)
-                    """, (
-                        lottery_id,
+                # 检查发言要求
+                if (lottery.get('message_group_id') and lottery.get('message_count') and lottery.get('message_check_time')):
+                    if not await check_user_messages(
+                        context.bot,
                         user.id,
-                        user.first_name,
-                        user.username,
-                        'active',
-                        join_time
-                    ))
+                        lottery['message_group_id'],
+                        lottery['message_count'],
+                        lottery['message_check_time'],
+                        lottery_id,
+                        update
+                    ):
+                        chat = await context.bot.get_chat(lottery['message_group_id'])
+                        await query.message.reply_text(
+                            f"❌ 需要在群组 {chat.title} 中最近 {lottery['message_check_time']} 小时内发言 {lottery['message_count']} 条\n"
+                            "💡 提示：只统计文本消息"
+                        )
+                        return
+                # 添加参与记录
+                now = datetime.now(timezone.utc)
+                try:
+                    await db.participants.insert_one({
+                        'lottery_id': lottery_id,
+                        'user_id': user.id,
+                        'nickname': user.first_name,
+                        'username': user.username,
+                        'status': 'active',
+                        'join_time': now,
+                        'created_at': now,
+                        'updated_at': now
+                    })
                     chat_type = query.message.chat.type
+                    success_message = f"🎉 恭喜 {user.first_name} 成功参与抽奖《{lottery['title']}》！"
                     if chat_type in ['group', 'supergroup']:
                         # 添加聊天消息确认
                         await context.bot.send_message(
                             chat_id=query.message.chat_id,
-                            text=f"🎉 恭喜 {user.first_name} 成功参与抽奖《{title}》！"
+                            text=success_message
                         )
                     else:
                         await context.bot.send_message(
                             chat_id=query.message.chat_id,
-                            text=f"🎉 恭喜 {user.first_name} 成功参与抽奖《{title}》！"
+                            text=success_message
                         )
                         # 刷新抽奖列表
                         await refresh_lottery_list(update, context)
                         await query.message.delete()  # 删除临时提示消息
-
+                except Exception as e:
+                    logger.error(f"保存参与记录时出错: {e}", exc_info=True)
+                    await query.message.reply_text("❌ 参与失败，请稍后重试")
+                    return
             except Exception as e:
                 logger.error(f"处理参与抽奖时出错: {e}", exc_info=True)
                 await query.message.reply_text("❌ 参与失败，请稍后重试")
@@ -362,68 +440,76 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     return
                 _, lottery_id, group_id = parts
                 # 从数据库获取抽奖信息
-                with DatabaseConnection() as c:
-                    # 获取抽奖基本信息
-                    c.execute("""
-                        SELECT ls.title, ls.description, ls.media_type, ls.media_url, 
-                            ls.draw_method, ls.participant_count, ls.draw_time,
-                            ls.required_groups, ls.keyword_group_id, ls.keyword, 
-                            ls.message_group_id, ls.message_count, ls.message_check_time,
-                            ls.require_username
-                        FROM lottery_settings ls
-                        WHERE ls.lottery_id = ?
-                    """, (lottery_id,))
-                    lottery_data = c.fetchone()
-                    if not lottery_data:
-                        await query.message.reply_text("❌ 找不到抽奖信息")
-                        return
-                    (title, description, media_type, media_url, draw_method, participant_count, 
-                     draw_time, required_groups, keyword_group_id, keyword, 
-                     message_group_id, message_count, message_check_time, 
-                     require_username) = lottery_data
-                    # 获取奖品信息
-                    c.execute("SELECT name, total_count FROM prizes WHERE lottery_id = ?", (lottery_id,))
-                    prizes = c.fetchall()
-                # 构建抽奖消息
-                prize_text = "\n".join([f"🎁 {name} x {count}" for name, count in prizes])
-                requirements = []
-                if require_username:
-                    requirements.append("❗️ 需要设置用户名")
-                if keyword and keyword_group_id:
-                    try:
-                        chat = await context.bot.get_chat(keyword_group_id)
-                        chat_link = f"<a href='https://t.me/{chat.username}'>{chat.title}</a>" if chat.username else chat.title
-                        requirements.append(f"❗️ 在群组{chat_link}中发送关键词：{keyword}")
-                    except Exception as e:
-                        logger.error(f"获取关键词群组{keyword_group_id}信息失败: {e}")
+                db = await MongoDBConnection.get_database()
+                lottery = await db.lottery_settings.find_one(
+                    {'lottery_id': lottery_id},
+                    {
+                        'title': 1,
+                        'description': 1,
+                        'media_type': 1,
+                        'media_url': 1,
+                        'draw_method': 1,
+                        'participant_count': 1,
+                        'draw_time': 1,
+                        'required_groups': 1,
+                        'keyword_group_id': 1,
+                        'keyword': 1,
+                        'message_group_id': 1,
+                        'message_count': 1,
+                        'message_check_time': 1,
+                        'require_username': 1
+                    }
+                )
+                    
+                if  lottery:
+                    await query.message.reply_text("❌ 找不到抽奖信息")
+                    return
 
-                if required_groups:
-                    group_ids = required_groups.split(',')
-                    for gid in group_ids:
+                # 获取奖品信息
+                prizes = await db.prizes.find(
+                    {'lottery_id': lottery_id},
+                    {'name': 1, 'total_count': 1}
+                ).to_list(None)
+                # 构建抽奖消息
+                prize_text = "\n".join([f"🎁 {p['name']} x {p['total_count']}" for p in prizes])
+                requirements = []
+                if lottery['require_username']:
+                    requirements.append("❗️ 需要设置用户名")
+                if lottery.get('keyword') and lottery.get('keyword_group_id'):
+                    try:
+                        chat = await context.bot.get_chat(lottery['keyword_group_id'])
+                        chat_link = f"<a href='https://t.me/{chat.username}'>{chat.title}</a>" if chat.username else chat.title
+                        requirements.append(f"❗️ 在群组{chat_link}中发送关键词：{lottery['keyword']}")
+                    except Exception as e:
+                        logger.error(f"获取关键词群组{lottery['keyword_group_id']}信息失败: {e}")
+
+                if lottery.get('required_groups'):
+                    for gid in lottery['required_groups']:
                         try:
                             chat = await context.bot.get_chat(gid)
                             chat_link = f"<a href='https://t.me/{chat.username}'>{chat.title}</a>" if chat.username else chat.title
                             requirements.append(f"❗️ 需要加入：{chat_link}")
                         except Exception as e:
                             logger.error(f"获取群组 {gid} 信息失败: {e}")
-                if message_group_id:
+                if lottery.get('message_group_id'):
                     try:
-                        chat = await context.bot.get_chat(message_group_id)
+                        chat = await context.bot.get_chat(lottery['message_group_id'])
                         chat_link = f"<a href='https://t.me/{chat.username}'>{chat.title}</a>" if chat.username else chat.title
-                        requirements.append(f"❗️ {message_check_time}小时内在群组{chat_link}中发送消息：{message_count}条")
+                        requirements.append(f"❗️ {lottery['message_check_time']}小时内在群组{chat_link}中发送消息：{lottery['message_count']}条")
                     except Exception as e:
-                        logger.error(f"获取消息群组 {message_group_id} 信息失败: {e}")
+                        logger.error(f"获取消息群组 {lottery['message_group_id']} 信息失败: {e}")
                 requirements_text = "\n".join(requirements) if requirements else ""
                 # 处理开奖时间显示
-                if draw_method == 'draw_when_full':
-                    draw_info = f"👥 满{participant_count}人自动开奖"
+                if lottery['draw_method'] == 'draw_when_full':
+                    draw_info = f"👥 满{lottery['participant_count']}人自动开奖"
                 else:
+                    draw_time = lottery['draw_time'].strftime('%Y-%m-%d %H:%M:%S')
                     draw_info = f"⏰ {draw_time} 准时开奖"
                 message = (
                     f"养生品茶🍵： https://t.me/yangshyyds\n\n"
                     f"🎉 抽奖活动\n\n"
-                    f"📢 抽奖标题： {title}\n\n"
-                    f"📝 抽奖描述： \n{description}\n\n"
+                    f"📢 抽奖标题： {lottery['title']}\n\n"
+                    f"📝 抽奖描述： \n{lottery['description']}\n\n"
                     f"🎁 奖品清单：\n{prize_text}\n\n"
                     f"📋 参与要求：\n{requirements_text}\n\n"
                     f"⏳ 开奖方式：\n{draw_info}\n\n"
@@ -431,9 +517,9 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     f"🤖 @{YOUR_BOT}"
                 )
                     # 添加媒体消息（如果有）
-                if media_url:
+                if lottery.get('media_url'):
                     try:
-                        media_message = await handle_media(media_url)
+                        media_message = await handle_media(lottery['media_url'])
                     except Exception as e:
                         logger.error(f"处理媒体文件失败: {e}")
                         media_message = None
@@ -457,10 +543,11 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
                 # 发送到群组/频道
+                sent_message = None
                 if media_message:
                     # 发送带媒体的消息
                     if isinstance(media_message, bytes):
-                        if media_type == 'image':
+                        if lottery['media_type'] == 'image':
                             sent_message = await context.bot.send_photo(
                                 chat_id=group_id,
                                 photo=media_message,
@@ -468,7 +555,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                                 reply_markup=reply_markup,
                                 parse_mode='HTML'
                             )
-                        elif media_type == 'video':
+                        elif lottery['media_type'] == 'video':
                             sent_message = await context.bot.send_video(
                                 chat_id=group_id,
                                 video=media_message,
@@ -499,7 +586,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         if media_message:
                             # 发送带媒体的消息
                             if isinstance(media_message, bytes):
-                                if media_type == 'image':
+                                if lottery['media_type'] == 'image':
                                     await context.bot.send_photo(
                                         chat_id="-1001526013692",
                                         photo=media_message,
@@ -507,7 +594,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                                         reply_markup=reply_markup,
                                         parse_mode='HTML'
                                     )
-                                elif media_type == 'video':
+                                elif lottery['media_type'] == 'video':
                                     await context.bot.send_video(
                                         chat_id="-1001526013692",
                                         video=media_message,
@@ -547,46 +634,69 @@ async def refresh_lottery_list(update: Update, context: ContextTypes.DEFAULT_TYP
     """刷新抽奖列表"""
     query = update.callback_query
     try:
-        with DatabaseConnection() as conn:
-            conn.execute("""
-                SELECT l.id, l.status, ls.title, ls.draw_method, 
-                       ls.participant_count, ls.draw_time,
-                       (SELECT COUNT(*) FROM participants p WHERE p.lottery_id = l.id) as current_count
-                FROM lotteries l
-                JOIN lottery_settings ls ON l.id = ls.lottery_id
-                WHERE l.status = 'active'
-                ORDER BY l.created_at DESC
-                LIMIT 10
-            """)
-            active_lotteries = conn.fetchall()
+        db = await MongoDBConnection.get_database()
+        pipeline = [
+            {
+                '$match': {'status': 'active'}
+            },
+            {
+                '$lookup': {
+                    'from': 'lottery_settings',
+                    'localField': 'lottery_id',
+                    'foreignField': 'lottery_id',
+                    'as': 'settings'
+                }
+            },
+            {
+                '$unwind': '$settings'
+            },
+            {
+                '$lookup': {
+                    'from': 'participants',
+                    'localField': 'lottery_id',
+                    'foreignField': 'lottery_id',
+                    'pipeline': [{'$count': 'count'}],
+                    'as': 'participant_count'
+                }
+            },
+            {
+                '$sort': {'created_at': -1}
+            },
+            {
+                '$limit': 10
+            }
+        ]
+        active_lotteries = await db.lotteries.aggregate(pipeline).to_list(None)
 
-            message = "🎲 <b>当前进行中的抽奖活动</b>\n\n"
-            keyboard = []
+        message = "🎲 <b>当前进行中的抽奖活动</b>\n\n"
+        keyboard = []
 
-            if not active_lotteries:
-                message += "😔 目前没有正在进行的抽奖活动\n"
-            else:
-                for lottery in active_lotteries:
-                    lottery_id, status, title, draw_method, max_participants, draw_time, current_count = lottery
+        if not active_lotteries:
+            message += "😔 目前没有正在进行的抽奖活动\n"
+        else:
+            for lottery in active_lotteries:
+                current_count = lottery['participant_count'][0]['count'] if lottery['participant_count'] else 0
+                settings = lottery['settings']
                     
-                    # 处理开奖方式显示
-                    if draw_method == 'draw_when_full':
-                        draw_info = f"👥 {current_count}/{max_participants}人"
-                    else:
-                        draw_info = f"⏰ {draw_time}"
+                # 处理开奖方式显示
+                if settings['draw_method'] == 'draw_when_full':
+                    draw_info = f"👥 {current_count}/{settings['participant_count']}人"
+                else:
+                    draw_time = settings['draw_time'].strftime('%Y-%m-%d %H:%M:%S')
+                    draw_info = f"⏰ {draw_time}"
 
-                    message += (
-                        f"📌 <b>{title}</b>\n"
-                        f"📊 {draw_info}\n\n"
+                message += (
+                    f"📌 <b>{settings['title']}</b>\n"
+                    f"📊 {draw_info}\n\n"
+                )
+
+                # 添加参与按钮
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"参与 {settings['title']}", 
+                        callback_data=f'join_{lottery["lottery_id"]}'  # Updated to use lottery["lottery_id"]
                     )
-
-                    # 添加参与按钮
-                    keyboard.append([
-                        InlineKeyboardButton(
-                            f"参与 {title}", 
-                            callback_data=f'join_{lottery_id}'
-                        )
-                    ])
+                ])
 
             # 添加返回按钮
             keyboard.append([
