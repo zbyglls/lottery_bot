@@ -308,7 +308,7 @@ async def create_lottery(
             })
             
         # 4. 更新抽奖状态
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
         await db.lotteries.update_one(
             {'id': lottery_id, 'creator_id': creator_id},
             {
@@ -521,7 +521,7 @@ async def cancel_lottery(request: Request, lottery_id: str):
             {
                 '$set': {
                     'status': 'cancelled',
-                    'updated_at': datetime.now(timezone.utc)
+                    'updated_at': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
                 }
             }
         )

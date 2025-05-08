@@ -66,7 +66,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     {'id': lottery_id},
                     {'$set': {
                         'status': 'cancelled',
-                        'updated_at': datetime.now(timezone.utc)
+                        'updated_at': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
                     }}
                 )
                     
@@ -397,7 +397,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         )
                         return
                 # 添加参与记录
-                now = datetime.now(timezone.utc)
+                now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
                 try:
                     await db.participants.insert_one({
                         'lottery_id': lottery_id,

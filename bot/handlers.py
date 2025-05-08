@@ -502,7 +502,7 @@ async def handle_keyword_participate(update: Update, context):
                     continue
 
         # 添加参与记录
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
         await db.participants.insert_one({
             'lottery_id': lottery['lottery_id'],
             'user_id': Int64(user.id),
@@ -624,7 +624,7 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
 
         # 检查当前消息
         current_message = update.message if update else None
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
         # 获取用户现有的消息计数
         message_record = await db.message_counts.find_one({
@@ -791,7 +791,7 @@ async def handle_message_count_participate(update: Update, context):
                 return
 
             # 添加参与记录
-            now = datetime.now(timezone.utc)
+            now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
             await db.participants.insert_one({
                 'lottery_id': lottery_id,
                 'user_id': Int64(user.id),

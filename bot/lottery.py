@@ -81,7 +81,7 @@ async def draw_lottery(bot: Bot, lottery_id: str):
         if len(participants) < total_prize_count:
             logger.warning(f"参与人数({len(participants)})少于奖品总数({total_prize_count})")
         
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
         winners_to_insert = []
         
         for prize in prizes:
