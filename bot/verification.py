@@ -96,8 +96,9 @@ async def check_lottery_status(lottery_id: str, user_id: str) -> dict:
             }
             
         # 计算时间差
-        now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-        time_diff = (now - lottery['created_at']).total_seconds()
+        now = datetime.now(timezone.utc)
+        created_at = datetime.fromisoformat(lottery['created_at'])
+        time_diff = (now - created_at).total_seconds()
         
         # 验证创建者
         if str(lottery['creator_id']) != str(user_id):
