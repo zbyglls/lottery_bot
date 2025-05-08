@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 import aiohttp
+from config import SERVICE_URL
 from utils import logger
 from bot.bot_instance import get_bot
 from bot.lottery import draw_lottery
@@ -139,7 +140,7 @@ async def ping_service():
     while True:
         try:
             # 构造请求 URL
-            service_url = "https://yangshenbot.onrender.com/"
+            service_url = SERVICE_URL
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(service_url) as response:

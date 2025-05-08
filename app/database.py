@@ -61,11 +61,15 @@ def init_db():
                      join_method TEXT NOT NULL,  -- 'private_chat' 或 'group_keyword'
                      keyword_group_id TEXT,
                      keyword TEXT,
+                     message_group_id TEXT,  -- 参与者发言的群组ID
+                     message_count INTEGER DEFAULT 0,  -- 要求的发言数量
+                     message_check_time INTEGER DEFAULT 24,  -- 检查发言的时间范围(小时)
                      require_username BOOLEAN DEFAULT 0,
                      required_groups TEXT,        -- 需要加入的群组/频道ID，多个用逗号分隔
                      draw_method TEXT NOT NULL,  -- 'draw_when_full' 或 'draw_at_time'
                      participant_count INTEGER DEFAULT 1,
                      draw_time TIMESTAMP,
+                     message_count_tracked BOOLEAN DEFAULT 0,  -- 是否已跟踪发言数量
                      FOREIGN KEY (lottery_id) REFERENCES lotteries(id) ON DELETE CASCADE
                      ) ''')
         # 奖品表
@@ -100,6 +104,17 @@ def init_db():
                      join_time DATETIME,
                      FOREIGN KEY (lottery_id) REFERENCES lotteries(id) ON DELETE CASCADE
                      )''')
+        # 消息跟踪记录表
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS message_counts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lottery_id INTEGER,
+                user_id INTEGER,
+                group_id TEXT,
+                message_count INTEGER DEFAULT 0,
+                last_message_time TIMESTAMP,
+                UNIQUE(lottery_id, user_id, group_id)
+                )""")
         # 创建索引
         c.execute('CREATE INDEX IF NOT EXISTS idx_lotteries_creator ON lotteries(creator_id)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_lotteries_status ON lotteries(status)')

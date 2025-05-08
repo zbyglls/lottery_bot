@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 from fastapi.templating import Jinja2Templates
-from utils import logger
 from dotenv import load_dotenv
 
 # 获取项目根目录
@@ -19,9 +18,7 @@ load_dotenv(env_path)
 
 # Telegram 配置
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-WEBHOOK_PATH = os.getenv('WEBHOOK_PATH', '/webhook')
-YOUR_BOT = os.getenv('YOUR_BOT', 'your_bot')
+YOUR_BOT = os.getenv('YOUR_BOT')
 
 
 # 数据库配置
@@ -36,5 +33,5 @@ JOB_QUEUE_ENABLED = True
 JOB_QUEUE_WORKERS = 4  # 工作线程数
 
 # 域名配置
-YOUR_DOMAIN = os.getenv('YOUR_DOMAIN', 'your-domain')
-logger.info(f"YOUR_DOMAIN={YOUR_DOMAIN}")
+YOUR_DOMAIN = os.getenv('YOUR_DOMAIN')
+SERVICE_URL = os.getenv('SERVICE_URL')

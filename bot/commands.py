@@ -7,7 +7,7 @@ from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, Mes
 from bot.conversation import SELECTING_ACTION
 from config import YOUR_DOMAIN
 from bot.verification import check_channel_subscription, check_lottery_creation
-from bot.handlers import handle_keyword_participate, handle_media_message
+from bot.handlers import handle_keyword_participate, handle_media_message, handle_message_count_participate
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -38,7 +38,6 @@ async def create_lottery(user, context, chat_id):
         
         # 创建初始抽奖记录
         with DatabaseConnection() as conn:
-            logger.info("成功连接到数据库")
             conn.execute("""
                 INSERT INTO lotteries (
                     id, creator_id, creator_name, status, type, created_at, updated_at
@@ -115,12 +114,6 @@ async def new_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"处理 /new 命令时出错: {e}", exc_info=True)
         if update.message:
             await update.message.reply_text("创建抽奖时发生错误，请稍后重试。")
-
-
-
-async def newinvite_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 /newinvite 命令 - 新建邀请抽奖"""
-    await update.message.reply_text("创建邀请抽奖活动的功能正在开发中，请稍后再试。")
 
 
 async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -233,13 +226,15 @@ async def get_media_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def register_commands(app):
     """注册所有命令处理器"""
+    keyword_filter = (filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS)
+    message_count_filter = (filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS)
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("new", new_command))
-    app.add_handler(CommandHandler("newinvite", newinvite_command))
     app.add_handler(CommandHandler("mylottery", mylottery_command))
     app.add_handler(CommandHandler("media_id", get_media_id))
     app.add_handler(CallbackQueryHandler(verify_follow, pattern='^verify_follow$'))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_keyword_participate))
-    app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL | filters.AUDIO | filters.Sticker.ALL, handle_media_message))
+    app.add_handler(MessageHandler(keyword_filter, handle_keyword_participate), group=1)
+    app.add_handler(MessageHandler(message_count_filter, handle_message_count_participate), group=2)
+    app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL | filters.AUDIO | filters.Sticker.ALL, handle_media_message), group=3)
 
 

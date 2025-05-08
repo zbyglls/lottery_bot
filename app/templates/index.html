@@ -64,6 +64,8 @@
                         <label for="private-chat">私聊机器人参与抽奖</label>
                         <input type="radio" id="group-keyword" name="join_method" value="send_keywords_in_group">
                         <label for="group-keyword">群内发送关键词参与抽奖</label>
+                        <input type="radio" id="group-message" name="join_method" value="send_messages_in_group">
+                        <label for="group-keyword">群内发言参与抽奖</label>
                     </div>
                 </div>
                 <div id="group-keyword-fields" class="mb-4 hidden">
@@ -80,6 +82,34 @@
                     <div class="flex items-center mb-4">
                         <label for="lottery-keyword" class="block text-gray-700 font-bold mr-2" style="width: 16.666667%;">抽奖关键词</label>
                         <input type="text" id="lottery-keyword" name="keyword" class="border border-gray-400 p-2 " placeholder="输入关键词">
+                    </div>
+                </div>
+                <div id="group-message-fields" class="mb-4 hidden">
+                    <div class="flex items-center mb-4 relative">
+                        <label for="message-group-search" class="block text-gray-700 font-bold mr-2" style="width: 16.666667%;">选择发言群组</label>
+                        <!-- 群组搜索框 -->
+                        <div class="message-search-container">
+                            <input type="text" id="message-group-search" placeholder="搜索发言群组">
+                            <ul id="message-group-dropdown">
+                                <!-- 下拉列表项 -->
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="w-1/2">
+                            <label for="message-count" class="block text-gray-700 font-bold mb-2">要求发言条数</label>
+                            <input type="number" id="message-count" name="message_count" 
+                                   class="border border-gray-300 p-2 w-full rounded" 
+                                   placeholder="设置发言条数，最大建议100条"
+                                   min="1">
+                        </div>
+                        <div class="w-1/2">
+                            <label for="message-check-time" class="block text-gray-700 font-bold mb-2">检查时间范围(小时)</label>
+                            <input type="number" id="message-check-time" name="message_check_time" 
+                                   class="border border-gray-300 p-2 w-full rounded" 
+                                   placeholder="检查时间范围（小时），最大建议24小时"
+                                   min="1" max="24">
+                        </div>
                     </div>
                 </div>
                 <div class="mb-4 flex items-center">

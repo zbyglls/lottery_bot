@@ -1,6 +1,8 @@
 import asyncio
+from datetime import datetime, timedelta
 import aiohttp
 from app.database import DatabaseConnection
+from config import YOUR_BOT
 from utils import logger
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
 from telegram.ext import MessageHandler, filters, ContextTypes
@@ -53,29 +55,46 @@ async def send_lottery_info_to_creator(creator_id: str, lottery_data: dict):
             f"-- {name}*{count}" 
             for name, count in zip(lottery_data['prize_names'], lottery_data['prize_counts'])
         ])
-        required_name = lottery_data.get('required_username')
-        require_text = ''
-        if required_name:
-            require_text = f"-- 参与者必须设置用户名\n"
+        required_name = lottery_data.get('require_username')
         # 获取所有必要群组信息
-        required_group_ids = lottery_data.get('required_groups', '').split(',')
+        required_groups = lottery_data.get('required_groups', '').split(',')
         keyword_group_id = lottery_data.get('keyword_group_id', '')
         keyword = lottery_data.get('keyword', '')
-        groups_text = ""
-        try:
-            if keyword_group_id:
+        message_group_id = lottery_data.get('message_group_id', '')
+        message_count = lottery_data.get('message_count', '')
+        message_check_time = lottery_data.get('message_check_time', '')
+
+        requirements = []
+        if required_name:
+            requirements.append("❗️ 参与者必须设置用户名\n")
+        if keyword and keyword_group_id:
+            try:
                 chat = await bot.get_chat(keyword_group_id)
-                groups_text += f"-- 在群组 {chat.title} 中发送： {keyword}  参与抽奖\n"
-            for group_id in required_group_ids:
-                if group_id:
-                    chat = await bot.get_chat(group_id)
-                    if chat.type == 'supergroup':
-                        groups_text += f"-- 加入群组： {chat.title} \n"
+                chat_link = f"<a href='https://t.me/{chat.username}'>{chat.title}</a>" if chat.username else chat.title
+                requirements.append(f"❗️ 在群组{chat_link}中发送关键词：{keyword}\n")
+            except Exception as e:
+                logger.error(f"获取关键词群组{keyword_group_id}信息失败: {e}")
+        if message_group_id:
+            try:
+                chat = await bot.get_chat(message_group_id)
+                chat_link = f"<a href='https://t.me/{chat.username}'>{chat.title}</a>" if chat.username else chat.title
+                requirements.append(f"❗️ {message_check_time}小时内在群组{chat_link}中发送消息：{message_count}条\n")
+            except Exception as e:
+                logger.error(f"获取消息群组 {message_group_id} 信息失败: {e}")
+        if required_groups:
+            for gid in required_groups:
+                try:
+                    chat = await bot.get_chat(gid)
+                    chat_link = f"<a href='https://t.me/{chat.username}'>{chat.title}</a>" if chat.username else chat.title
+                    if chat.type == 'supergroup': 
+                        requirements.append(f"❗️ 需要加入群组：{chat_link}\n")
                     elif chat.type == 'channel':
-                        groups_text += f"-- 加入频道： {chat.title}\n"
-        except Exception as e:
-            logger.error(f"获取群组信息时出错: {e}")
-            groups_text = "\n".join([f"-- 加入频道 {gid}" for gid in required_group_ids if gid])
+                        requirements.append(f"❗️ 需要关注频道：{chat_link}\n")
+                except Exception as e:
+                    logger.error(f"获取群组 {gid} 信息失败: {e}")
+                    requirements.append(f"❗️ 需要加入群组： {gid}\n")
+        
+        requirements_text = "\n".join(requirements) if requirements else ""
         
         # 构建开奖时间文本
         draw_time_text = (
@@ -91,16 +110,17 @@ async def send_lottery_info_to_creator(creator_id: str, lottery_data: dict):
             f"📪抽奖说明：\n{lottery_data['description']}\n\n"
             f"🎁 奖品内容:\n{prizes_text}\n\n"
             f"🎫 参与条件:\n"
-            f"{require_text}\n"
-            f"{groups_text}\n"
+            f"{requirements_text}\n"
             f"📆 开奖时间：{draw_time_text}\n\n"
         )
 
         # 为每个频道构建发布按钮
         keyboard = []
         if keyword_group_id:
-            required_group_ids.append(keyword_group_id)
-        for group_id in required_group_ids:
+            required_groups.append(keyword_group_id)
+        if message_group_id:
+            required_groups.append(message_group_id)
+        for group_id in set(required_groups):
             if group_id:
                 try:
                     chat = await bot.get_chat(group_id)
@@ -327,7 +347,7 @@ async def send_lottery_result_to_group(winners: list, groups: list):
         # 添加抽奖工具推广信息
         message += (
             f"\n\n🤖 机器人推荐：\n"
-            f"使用 @YangShenBot 轻松创建抽奖"
+            f"使用 @{YOUR_BOT} 轻松创建抽奖"
         )
 
         # 发送消息到群组
@@ -387,7 +407,6 @@ async def handle_keyword_participate(update: Update, context):
             
             lottery = c.fetchone()
             if not lottery:
-                logger.debug(f"未找到匹配的抽奖活动")
                 return
 
             lottery_id, title = lottery[0], lottery[1]
@@ -503,9 +522,250 @@ async def handle_media_message(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_to_message_id=message.message_id  # 使用这个替代 quote=True
         )
 
+
+async def check_user_messages(bot, user_id: int, group_id: str, required_count: int, check_hours: int, lottery_id: int, update=None) -> bool:
+    """检查用户在群组中的发言数量（实时统计）
+    
+    Args:
+        bot: Telegram bot 实例
+        user_id: 用户ID
+        group_id: 群组ID
+        required_count: 要求的发言数量
+        check_hours: 检查时间范围(小时)
+        lottery_id: 抽奖ID
+
+    Returns:
+        bool: 是否满足发言要求
+    """
+    try:
+        # 获取抽奖发布时间
+        with DatabaseConnection() as c:
+            c.execute("""
+                SELECT l.updated_at, ls.message_count_tracked
+                FROM lotteries l
+                LEFT JOIN lottery_settings ls ON l.id = ls.lottery_id
+                WHERE l.id = ?
+            """, (lottery_id,))
+            result = c.fetchone()
+            
+            if not result:
+                return False
+            
+            publish_time = datetime.strptime(result[0], '%Y-%m-%d %H:%M:%S')
+            message_count_tracked = result[1] or False
+
+        # 如果还没有开始跟踪消息，创建消息跟踪记录
+        if not message_count_tracked:
+            try:
+                with DatabaseConnection() as c:
+                    # 更新抽奖设置，标记已开始跟踪
+                    c.execute("""
+                        UPDATE lottery_settings 
+                        SET message_count_tracked = 1 
+                        WHERE lottery_id = ?
+                    """, (lottery_id,))
+            except Exception as e:
+                logger.error(f"创建消息计数表时出错: {e}")
+                return False
+
+        # 检查用户当前消息
+        current_message = update.message if update else None
+        current_time = datetime.now()
+
+        # 获取用户现有的消息计数
+        with DatabaseConnection() as c:
+            c.execute("""
+                SELECT message_count, last_message_time 
+                FROM message_counts 
+                WHERE lottery_id = ? AND user_id = ? AND group_id = ?
+            """, (lottery_id, user_id, group_id))
+            result = c.fetchone()
+
+            if result:
+                message_count, last_message_time = result
+                last_message_time = datetime.strptime(last_message_time.split('.')[0], '%Y-%m-%d %H:%M:%S')
+            else:
+                message_count = 0
+                last_message_time = publish_time
+
+            # 如果有新消息且是文本消息，增加计数
+            if (current_message and 
+                current_message.text and 
+                current_message.chat.id == int(group_id) and 
+                current_message.from_user.id == user_id):
+                
+                # 检查消息时间是否在有效期内
+                check_start_time = current_time - timedelta(hours=check_hours)
+                if current_time >= check_start_time:
+                    current_time = current_time.strftime('%Y-%m-%d %H:%M:%S')
+                    message_count += 1
+                    logger.info(f"用户 {user_id} 新增一条有效消息，当前数量: {message_count}")
+
+                    # 更新数据库
+                    c.execute("""
+                        INSERT INTO message_counts 
+                        (lottery_id, user_id, group_id, message_count, last_message_time)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(lottery_id, user_id, group_id) 
+                        DO UPDATE SET 
+                            message_count = ?,
+                            last_message_time = ?
+                    """, (
+                        lottery_id, user_id, group_id, message_count, current_time,
+                        message_count, current_time
+                    ))
+
+            # 检查是否达到要求
+            if message_count >= required_count:
+                logger.info(f"用户 {user_id} 已达到发言要求: {message_count}/{required_count}")
+                return True
+
+            logger.info(f"用户 {user_id} 发言数量不足: {message_count}/{required_count}")
+            return False
+
+    except Exception as e:
+        logger.error(f"检查用户发言数量时出错: {e}", exc_info=True)
+        return False
+
+
+async def handle_message_count_participate(update: Update, context):
+    """处理用户通过发言数量参与抽奖"""
+    try:
+        message = update.message
+        if not message or not message.text:
+            return
+            
+        user = message.from_user
+        chat_id = message.chat.id
+        
+        # 检查是否是群组消息
+        if message.chat.type not in ['group', 'supergroup']:
+            return
+            
+        # 获取该群组的发言要求抽奖
+        with DatabaseConnection() as c:
+            c.execute("""
+                SELECT 
+                    l.id, ls.title, ls.require_username, 
+                    ls.required_groups, ls.participant_count,
+                    ls.message_count, ls.message_check_time,
+                    (SELECT COUNT(*) FROM participants WHERE lottery_id = l.id) as current_count
+                FROM lotteries l
+                JOIN lottery_settings ls ON l.id = ls.lottery_id
+                WHERE l.status = 'active'
+                AND ls.message_group_id = ?
+                AND ls.message_count > 0
+            """, (str(chat_id),))
+            
+            lottery = c.fetchone()
+            if not lottery:
+                return
+            logger.info(f"找到发言数量参与的抽奖活动: {lottery}")
+            lottery_id, title = lottery[0], lottery[1]
+            required_username = lottery[2]
+            required_groups = lottery[3].split(',') if lottery[3] else []
+            message_count = lottery[5]
+            message_check_time = lottery[6]
+            current_count = lottery[7]
+
+            # 检查重复参与
+            c.execute("""
+                SELECT 1 FROM participants 
+                WHERE lottery_id = ? AND user_id = ?
+            """, (lottery_id, user.id))
+            
+            if c.fetchone():
+                logger.info(f"用户 {user.full_name} (ID: {user.id}) 已参与过抽奖 {title}")
+                return
+            # 检查用户名要求
+            if required_username and not user.username:
+                await message.reply_text(
+                    "❌ 参与失败：请先设置用户名后再参与抽奖",
+                    reply_to_message_id=message.message_id
+                )
+                return
+            # 检查群组要求
+            for group_id in required_groups:
+                if not group_id:
+                    continue
+                try:
+                    member = await context.bot.get_chat_member(group_id, user.id)
+                    if member.status not in ['member', 'administrator', 'creator']:
+                        chat = await context.bot.get_chat(group_id)
+                        await message.reply_text(
+                            f"❌ 参与失败：请先加入群组 {chat.title}",
+                            reply_to_message_id=message.message_id
+                        )
+                        return
+                except Exception as e:
+                    logger.error(f"检查用户群组成员状态时出错: {e}")
+                    continue
+
+            # 检查发言数量
+            if not await check_user_messages(
+                context.bot,
+                user.id,
+                chat_id,
+                message_count,
+                message_check_time,
+                lottery_id,
+                update
+            ):
+                return
+
+            # 添加参与记录
+            c.execute("""
+                INSERT INTO participants (
+                    lottery_id, user_id, nickname, username,
+                    join_time, status
+                ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')
+            """, (lottery_id, user.id, user.full_name, user.username))
+            
+            # 发送参与成功提示
+            await message.reply_text(
+                f"✅ 参与成功！\n\n"
+                f"🎲 抽奖活动：{title}\n"
+                f"👥 当前参与人数：{current_count + 1}\n\n"
+                f"🔔 开奖后会通过机器人私信通知",
+                reply_to_message_id=message.message_id
+            )
+            
+            logger.info(f"用户 {user.full_name} (ID: {user.id}) 成功参与抽奖 {title}")
+            # 清除该用户的消息记录数据
+            c.execute("""
+                DELETE FROM message_counts 
+                WHERE lottery_id = ? AND user_id = ? AND group_id = ?
+            """, (lottery_id, user.id, chat_id))
+            
+    except Exception as e:
+        logger.error(f"处理发言数量参与抽奖时出错: {e}", exc_info=True)
+
+async def check_keyword_message(bot, user_id: int, group_id: str, keyword: str) -> bool:
+    """检查用户是否在群组发送过关键词"""
+    try:
+        current_time = datetime.now()
+        check_time = current_time - timedelta(hours=1)  # 检查最近1小时
+        
+        async for message in bot.get_chat_history(
+            chat_id=group_id,
+            offset_date=check_time,
+            limit=1000
+        ):
+            if (message.from_user and 
+                message.from_user.id == user_id and 
+                message.text and 
+                message.text.strip() == keyword):
+                return True
+        
+        return False
+    except Exception as e:
+        logger.error(f"检查关键词发送记录时出错: {e}")
+        return False
+
 def register_handlers(app):
     """注册所有非命令处理器"""
     logger.info("开始注册处理器")
     app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO, handle_media_message))
     app.add_handler(MessageHandler(filters.TEXT & (filters.GroupChat | filters.SUPERGROUP), handle_keyword_participate))
+    app.add_handler(MessageHandler(filters.TEXT & (filters.GroupChat | filters.SUPERGROUP), handle_message_count_participate))
     logger.info("处理器注册完成")

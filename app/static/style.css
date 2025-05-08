@@ -153,3 +153,68 @@ select:focus {
 #keyword-group-dropdown li:hover {
     background-color: #f0f0f0;
 }
+
+/* 调整下拉列表的位置和宽度 */
+#message-group-dropdown {
+    /* 相对于父元素绝对定位 */
+    position: absolute;
+    /* 与输入框左对齐 */
+    left: calc(16.666667% + 2px); 
+    /* 显示在输入框下方 */
+    top: 100%; 
+    /* 与输入框右侧对齐，减去左右边距 */
+    right: 2px; 
+    /* 防止顶部边框重叠 */
+    border-top: none; 
+    /* 确保下拉列表在其他元素之上 */
+    z-index: 1000; 
+    /* 让下拉列表宽度包含边框和内边距 */
+    box-sizing: border-box; 
+    /* 增加一点顶部间距 */
+    margin-top: -1px; 
+}
+
+.message-search-container {
+    position: relative;
+    display: inline-block;
+}
+/* 输入框样式保持不变 */
+#message-group-search {
+    width: 300px; 
+    padding: 8px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box; 
+}
+
+/* 下拉列表样式 */
+#message-group-dropdown {
+    position: absolute;
+    left: 0; /* 与输入框所在容器的左边界对齐 */
+    top: calc(100% - 1px); /* 显示在输入框正下方，减去 1px 消除边框间隙 */
+    width: 300px; /* 与输入框宽度保持一致 */
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    z-index: 1000;
+    box-sizing: border-box; 
+}
+
+/* 下拉列表项样式 */
+#message-group-dropdown li {
+    padding: 8px; 
+    cursor: pointer;
+    box-sizing: border-box; 
+}
+
+/* 下拉列表项悬停样式 */
+#message-group-dropdown li:hover {
+    background-color: #f0f0f0;
+}

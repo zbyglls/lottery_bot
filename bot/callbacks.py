@@ -3,7 +3,7 @@ from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, 
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
 from app.database import DatabaseConnection
-from bot.handlers import handle_media
+from bot.handlers import check_keyword_message, check_user_messages, handle_media
 from config import YOUR_BOT
 from utils import logger
 from bot.verification import check_channel_subscription
@@ -235,7 +235,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 # 检查抽奖信息
                 with DatabaseConnection() as conn:
                     conn.execute("""
-                        SELECT ls.title, ls.require_username, ls.required_groups,
+                        SELECT ls.title, ls.require_username, ls.required_groups, ls.keyword_group_id, ls.keyword,
+                               ls.message_group_id, ls.message_count, ls.message_check_time,
                                ls.participant_count, l.status,
                                (SELECT COUNT(*) FROM participants WHERE lottery_id = l.id) as current_count
                         FROM lottery_settings ls
@@ -248,7 +249,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         await query.message.edit_text("❌ 抽奖活动不存在")
                         return
 
-                    title, require_username, required_groups, max_participants, status, current_count = result
+                    title, require_username, required_groups, keyword_group_id, keyword, message_group_id, message_count, message_check_time, max_participants, status, current_count = result
 
                     # 检查抽奖状态
                     if status != 'active':
@@ -294,7 +295,30 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                             except Exception as e:
                                 logger.error(f"检查群组成员状态时出错: {e}")
                                 continue
-
+                    # 检查关键词要求
+                    if keyword_group_id and keyword:
+                        if not await check_keyword_message(context.bot, user.id, keyword_group_id, keyword):
+                            chat = await context.bot.get_chat(keyword_group_id)
+                            await query.message.reply_text(
+                                f"❌ 请先在群组 {chat.title} 中发送关键词：{keyword}"
+                            )
+                            return
+                        
+                    # 检查发言要求
+                    if message_group_id and message_count and message_check_time:
+                        if not await check_user_messages(
+                            context.bot,
+                            user.id,
+                            message_group_id,
+                            message_count,
+                            message_check_time
+                        ):
+                            chat = await context.bot.get_chat(message_group_id)
+                            await query.message.reply_text(
+                                f"❌ 需要在群组 {chat.title} 中最近 {message_check_time} 小时内发言 {message_count} 条\n"
+                                "💡 提示：只统计文本消息"
+                            )
+                            return
                     # 添加参与记录
                     join_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     conn.execute("""
@@ -343,7 +367,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     c.execute("""
                         SELECT ls.title, ls.description, ls.media_type, ls.media_url, 
                             ls.draw_method, ls.participant_count, ls.draw_time,
-                            ls.required_groups, ls.keyword_group_id, ls.keyword,
+                            ls.required_groups, ls.keyword_group_id, ls.keyword, 
+                            ls.message_group_id, ls.message_count, ls.message_check_time,
                             ls.require_username
                         FROM lottery_settings ls
                         WHERE ls.lottery_id = ?
@@ -354,7 +379,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         return
                     (title, description, media_type, media_url, draw_method, participant_count, 
                      draw_time, required_groups, keyword_group_id, keyword, 
-                    require_username) = lottery_data
+                     message_group_id, message_count, message_check_time, 
+                     require_username) = lottery_data
                     # 获取奖品信息
                     c.execute("SELECT name, total_count FROM prizes WHERE lottery_id = ?", (lottery_id,))
                     prizes = c.fetchall()
@@ -364,7 +390,13 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 if require_username:
                     requirements.append("❗️ 需要设置用户名")
                 if keyword and keyword_group_id:
-                    requirements.append(f"❗️ 在群组中发送关键词：{keyword}")
+                    try:
+                        chat = await context.bot.get_chat(keyword_group_id)
+                        chat_link = f"<a href='https://t.me/{chat.username}'>{chat.title}</a>" if chat.username else chat.title
+                        requirements.append(f"❗️ 在群组{chat_link}中发送关键词：{keyword}")
+                    except Exception as e:
+                        logger.error(f"获取关键词群组{keyword_group_id}信息失败: {e}")
+
                 if required_groups:
                     group_ids = required_groups.split(',')
                     for gid in group_ids:
@@ -374,7 +406,14 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                             requirements.append(f"❗️ 需要加入：{chat_link}")
                         except Exception as e:
                             logger.error(f"获取群组 {gid} 信息失败: {e}")
-                requirements_text = "\n".join(requirements) if requirements else "无特殊要求"
+                if message_group_id:
+                    try:
+                        chat = await context.bot.get_chat(message_group_id)
+                        chat_link = f"<a href='https://t.me/{chat.username}'>{chat.title}</a>" if chat.username else chat.title
+                        requirements.append(f"❗️ {message_check_time}小时内在群组{chat_link}中发送消息：{message_count}条")
+                    except Exception as e:
+                        logger.error(f"获取消息群组 {message_group_id} 信息失败: {e}")
+                requirements_text = "\n".join(requirements) if requirements else ""
                 # 处理开奖时间显示
                 if draw_method == 'draw_when_full':
                     draw_info = f"👥 满{participant_count}人自动开奖"
@@ -456,7 +495,6 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 if sent_message:
                     # 发布成功提示    
                     await context.bot.send_message(chat_id=query.message.chat_id, text="✅ 发布成功！")
-                    logger.info(f"query.message.chat_id: {query.message.chat_id}, typy:{type(query.message.chat_id)}")
                     if group_id != "-1001526013692" and group_id != "-1001638087196":
                         if media_message:
                             # 发送带媒体的消息

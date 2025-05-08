@@ -98,7 +98,6 @@ async def draw_lottery(bot: Bot, lottery_id: str):
 
             # 发送中奖通知
             logger.info(f"准备给中奖者发送中奖通知：")
-            logger.info(f"中奖者数据: {winners}")
             await send_batch_winner_notifications(winners, creator_id)
             
             # 发送群组通知
@@ -107,6 +106,8 @@ async def draw_lottery(bot: Bot, lottery_id: str):
                     winners,
                     lottery_info['groups']
                 )
+            logger.info(f"成功发送中奖通知和群组通知")
 
+        return
     except Exception as e:
         logger.error(f"执行开奖时出错: {e}", exc_info=True)

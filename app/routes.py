@@ -40,6 +40,9 @@ async def get_lottery_info(lottery_id):
                     ls.join_method,
                     ls.keyword_group_id,
                     ls.keyword,
+                    ls.message_group_id,
+                    ls.message_count,
+                    ls.message_check_time,
                     ls.require_username,
                     ls.required_groups,
                     ls.draw_method,
@@ -60,7 +63,7 @@ async def get_lottery_info(lottery_id):
                     "data": None
                 }
             else:
-                title, description, media_type, media_url, join_method, keyword_group_id, keyword, require_username, required_groups, draw_method, draw_when_full, draw_time, status, created_at = settings
+                title, description, media_type, media_url, join_method, keyword_group_id, keyword, message_group_id, message_count, message_check_time, require_username, required_groups, draw_method, draw_when_full, draw_time, status, created_at = settings
                 # 获取奖品信息
                 c.execute("""
                     SELECT name, total_count
@@ -86,7 +89,9 @@ async def get_lottery_info(lottery_id):
                             if response_data.get('status') == 'success':
                                 group_title = response_data.get('data').get('title')
                                 group_titles.append(f"------ {group_title}") 
-                                group_titles.append("\n")  
+                                group_titles.append("\n")
+                if group_titles:
+                    group_titles = f"--- 需要加入的群组/频道：\n" + "\n ".join(group_titles) + "\n"
                 if draw_method == 'draw_at_time':
                     draw_time = parse_time(draw_time)
                 elif draw_method == 'draw_when_full':
@@ -99,13 +104,20 @@ async def get_lottery_info(lottery_id):
                             keyword_group = response_data.get('data').get('title')
                             keyword = f"--- 在群组  {keyword_group}  中使用关键词  {keyword}  参与抽奖"
                 if require_username == 1:
-                    require_username = '必须设置用户名'
-            
+                    require_username = '---  必须设置用户名'
+                message_info = ''
+                if message_group_id:
+                    response = await get_chat_info(message_group_id)
+                    if isinstance(response, JSONResponse):
+                        response_data = json.loads(response.body)
+                        if response_data.get('status') == 'success':
+                            message_group = response_data.get('data').get('title')
+                            message_info = f"--- {message_check_time}小时内在群组  {message_group}  中发送  {message_count}  条消息"
                 join_method =(
-                    f"--- {require_username}\n"
+                    f"{require_username}\n"
                     f"{keyword}\n"
-                    f"--- 需要加入的群组/频道：\n"
-                    + "\n ".join(group_titles) + "\n"
+                    f"{group_titles}\n"
+                    f"{message_info}\n"
                 )
                 # 构建返回数据
                 lottery_info = {
@@ -195,8 +207,7 @@ async def index(
         if isinstance(response, JSONResponse):
             response_data = json.loads(response.body)
             if response_data.get('status') == 'success':
-                creator = response_data.get('data')
-                logger.info(f"获取到的创建人信息: {creator}")   
+                creator = response_data.get('data') 
                 creator_info = {
                     'lottery_id': lottery_id,
                     'user_id': creator.get('id'),
@@ -255,6 +266,9 @@ async def create_lottery(
     media_url: Optional[str] = Form(None),
     keyword_group_id: Optional[str] = Form(None),
     keyword: Optional[str] = Form(None),
+    message_group_id: Optional[str] = Form(None),
+    message_count: Optional[int] = Form(None),
+    message_check_time: Optional[int] = Form(None),
     require_username: Optional[str] = Form(None),
     group_ids: list[str] = Form(None),
     participant_count: Optional[int] = Form(None),
@@ -269,30 +283,23 @@ async def create_lottery(
             'creator_id': creator_id,
             'join_method': join_method,
             'draw_method': draw_method,
-            'description': description
+            'description': description,
+            'prize_name': prize_name,
+            'prize_count': prize_count
         }
-        required_fields = ['title', 'creator_id', 'join_method', 'draw_method', 'description']
+        required_fields = ['title', 'creator_id', 'join_method', 'draw_method', 'description', 'prize_name', 'prize_count']
         for field in required_fields:
             if not form_data.get(field):
                 logger.error(f'缺少必填字段: {field}')
                 return JSONResponse({'status': 'error', 'message': f'缺少必填字段: {field}'})
 
-        # 2. 处理参与人数
-        try:
-            participant_count = participant_count if participant_count else 1
-            if participant_count < 1:
-                raise ValueError("参与人数必须大于0")
-        except ValueError as e:
-            logger.error(f'参与人数验证失败: {e}')
-            return JSONResponse({'status': 'error', 'message': '参与人数必须是大于0的整数'})
-
-        # 处理布尔值
+        # 2.处理布尔值
         require_username_bool = require_username.lower() in ('true', '1', 'yes') if require_username else False
         
         # 处理群组 ID 列表
-        required_groups_str = ','.join(group_ids) if group_ids else ''
+        required_groups_str = ','.join(group_ids) if group_ids else None
         # 处理抽奖时间
-        draw_time = parse_time(draw_time) if draw_time else ''
+        draw_time = parse_time(draw_time) if draw_time else None
 
         # 3. 创建抽奖活动
         with DatabaseConnection() as c:
@@ -327,12 +334,15 @@ async def create_lottery(
                     join_method,
                     keyword_group_id,
                     keyword,
+                    message_group_id,
+                    message_count,
+                    message_check_time,
                     require_username,
                     required_groups,
                     draw_method,
                     participant_count,
                     draw_time
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 lottery_id, 
                 title, 
@@ -340,13 +350,16 @@ async def create_lottery(
                 media_url, 
                 description, 
                 join_method,
-                keyword_group_id,
-                keyword,
+                keyword_group_id if keyword_group_id else None,
+                keyword if keyword else None,
+                message_group_id if message_group_id else None,
+                message_count if message_count else None,
+                message_check_time if message_check_time else None,
                 1 if require_username_bool else 0,  # 将布尔值转换为整数
                 required_groups_str,                 # 将群组ID列表转换为字符串
                 draw_method,
-                participant_count,
-                draw_time
+                participant_count if participant_count else None,
+                draw_time if draw_time else None
             ))
 
             # 3.3 添加奖品信息
@@ -379,6 +392,9 @@ async def create_lottery(
             'join_method': join_method,
             'keyword_group_id': keyword_group_id,
             'keyword': keyword,
+            'message_group_id': message_group_id,
+            'message_count': message_count,
+            'message_check_time': message_check_time,
             'require_username': require_username_bool,
             'required_groups': required_groups_str,
             'draw_method': draw_method,
@@ -571,15 +587,3 @@ async def get_chat_info(query: str):
             'message': '系统错误，请稍后重试'
         })
 
-@router.get('/health')
-async def health_check():
-    """健康检查路由"""
-    try:
-        service_url = "https://yangshenbot.onrender.com/"
-        async with aiohttp.ClientSession() as session:
-                async with session.get(service_url) as response:
-                    if response.status == 200:
-                        return JSONResponse({'status': 'ok'})
-    except Exception as e:
-        logger.error(f"健康检查失败: {e}", exc_info=True)
-        return JSONResponse({'status': 'error', 'message': '健康检查失败'})

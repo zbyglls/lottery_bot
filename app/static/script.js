@@ -5,6 +5,9 @@ let groups = [];
 let prizes = [];
 let searchInput; 
 let dropdown;
+let messageSearchInput
+let messageDropdown
+let messageGroupId
 
 // 将模态框相关函数移到全局作用域
 function openModal(modalId) {
@@ -160,14 +163,17 @@ async function searchGroups() {
                 li.classList.add('p-2', 'hover:bg-gray-100');
                 li.addEventListener('click', () => {
                     searchInput.value = group.title;
-                    keywordGroupId = group.id; // 保存选中的群组ID
+                    // 添加隐藏字段存储群组ID
+                    let hiddenInput = document.getElementById('keyword_group_id');
+                    if (!hiddenInput) {
+                        hiddenInput = document.createElement('input');
+                        hiddenInput.type = 'hidden';
+                        hiddenInput.id = 'keyword_group_id';
+                        hiddenInput.name = 'keyword_group_id';
+                        searchInput.parentNode.appendChild(hiddenInput);
+                    }
+                    hiddenInput.value = group.id;
                     hideDropdown();
-                    // 插入隐藏输入框
-                    let hiddenInput = document.createElement('input');
-                    hiddenInput.type = 'hidden';
-                    hiddenInput.name = 'keyword_group_id';
-                    hiddenInput.value = keywordGroupId;
-                    searchInput.parentNode.appendChild(hiddenInput);
                 });
                 dropdown.appendChild(li);
             } else {
@@ -197,6 +203,91 @@ async function searchGroups() {
     }
 }
 
+// 显示发言群组下拉列表
+function showMessageDropdown() {
+    messageDropdown.classList.remove('hidden');
+
+}
+
+// 隐藏发言群组下拉列表
+function hideMessageDropdown() {
+    messageDropdown.classList.add('hidden');
+}
+
+// 搜索发言群组
+async function searchMessageGroups() {
+    if (!messageSearchInput || !messageDropdown) {
+        console.error('messageSearchInput 或 messageDropdown 未正确初始化');
+        return;
+    }
+
+    const query = messageSearchInput.value;
+    messageDropdown.innerHTML = '';
+
+    if (query === '') {
+        const li = document.createElement('li');
+        li.textContent = '无有效选项';
+        li.classList.add('p-2', 'text-gray-500', 'cursor-default');
+        messageDropdown.appendChild(li);
+        showMessageDropdown();
+        return;
+    }
+
+    try {
+        const response = await fetch(`/get_chat_info?query=${encodeURIComponent(query)}`);
+        if (!response.ok) {
+            throw new Error('网络响应失败');
+        }
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            const group = data.data;
+            if (group.title) {
+                const li = document.createElement('li');
+                li.textContent = group.title;
+                li.classList.add('p-2', 'hover:bg-gray-100', 'cursor-pointer');
+                li.addEventListener('click', () => {
+                    messageSearchInput.value = group.title;
+                    // 添加隐藏字段存储群组ID
+                    let hiddenInput = document.getElementById('message_group_id');
+                    if (!hiddenInput) {
+                        hiddenInput = document.createElement('input');
+                        hiddenInput.type = 'hidden';
+                        hiddenInput.id = 'message_group_id';
+                        hiddenInput.name = 'message_group_id';
+                        messageSearchInput.parentNode.appendChild(hiddenInput);
+                    }
+                    hiddenInput.value = group.id;
+                    hideMessageDropdown();
+                });
+                messageDropdown.appendChild(li);
+            } else {
+                const li = document.createElement('li');
+                li.textContent = '未找到相关群组';
+                li.classList.add('p-2', 'text-gray-500', 'cursor-default');
+                messageDropdown.appendChild(li);
+            }
+        } else {
+            console.error('搜索失败:', data);
+            const li = document.createElement('li');
+            li.textContent = '未找到相关群组';
+            li.classList.add('p-2', 'text-gray-500', 'cursor-default');
+            messageDropdown.appendChild(li);
+        }
+
+        showMessageDropdown();
+
+    } catch (error) {
+        console.error('搜索群组时出错:', error);
+        const li = document.createElement('li');
+        li.textContent = '搜索出错，请检查网络';
+        li.classList.add('p-2', 'text-gray-500', 'cursor-default');
+        messageDropdown.appendChild(li);
+        showMessageDropdown();
+    }
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
     // 将函数添加到window对象
     window.openModal = openModal;
@@ -208,6 +299,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.debounce = debounce;
     window.showDropdown = showDropdown;
     window.hideDropdown = hideDropdown;
+    window.showMessageDropdown = showMessageDropdown;
+    window.hideMessageDropdown = hideMessageDropdown;
+    window.searchMessageGroups = searchMessageGroups;
+
 
     // 此函数用于切换显示不同的选项卡
     function showTab(tabId) {
@@ -388,25 +483,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 获取参与方式的单选按钮和相关的容器元素
-    const privateChatRadio = document.getElementById('private-chat');
-    const groupKeywordRadio = document.getElementById('group-keyword');
+    const joinMethodRadios = document.querySelectorAll('input[name="join_method"]');
     const groupKeywordFields = document.getElementById('group-keyword-fields');
+    const groupMessageFields = document.getElementById('group-message-fields');
 
     // 监听参与方式的选择变化
     function handleJoinMethodChange() {
-        if (privateChatRadio.checked) {
-            groupKeywordFields.classList.add('hidden');
-        } else if (groupKeywordRadio.checked) {
-            groupKeywordFields.classList.remove('hidden');
+            // 先隐藏所有相关字段
+        groupKeywordFields.classList.add('hidden');
+        groupMessageFields.classList.add('hidden');
+        // 获取当前选中的参与方式
+        const selectedMethod = document.querySelector('input[name="join_method"]:checked').value;
+        const hiddenInput = document.querySelector('input[name="keyword_group_id"]');
+        if (hiddenInput && selectedMethod !== 'send_keywords_in_group') {
+            hiddenInput.remove();
+        }
+        // 根据选择显示对应字段
+        switch(selectedMethod) {
+            case 'send_keywords_in_group':
+                groupKeywordFields.classList.remove('hidden');
+                break;
+            case 'send_messages_in_group':
+                groupMessageFields.classList.remove('hidden');
+                break;
+            // 默认情况（private_chat_bot）保持所有字段隐藏
+            default:
+                break;
         }
     }
 
+    // 为所有参与方式单选按钮添加事件监听
+    joinMethodRadios.forEach(radio => {
+        radio.addEventListener('change', handleJoinMethodChange);
+    });
+
     // 初始化时调用一次，确保初始状态正确
     handleJoinMethodChange();
-
-    // 为单选按钮添加事件监听器
-    privateChatRadio.addEventListener('change', handleJoinMethodChange);
-    groupKeywordRadio.addEventListener('change', handleJoinMethodChange);
 
 
     // 获取开奖方式的单选按钮和相关的容器元素
@@ -448,17 +560,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 获取元素
     searchInput = document.getElementById('keyword-group-search');
+    messageSearchInput = document.getElementById('message-group-search');
     dropdown = document.getElementById('keyword-group-dropdown');
-    // 使用防抖函数包装 searchGroups
+    messageDropdown = document.getElementById('message-group-dropdown');
+    // 使用防抖函数包装 searchGroups，debouncedSearchMessageGroups
     const debouncedSearchGroups = debounce(searchGroups, 300);
+    const debouncedSearchMessageGroups = debounce(searchMessageGroups, 300);
 
     // 监听输入事件
     searchInput.addEventListener('input', debouncedSearchGroups);
+    messageSearchInput.addEventListener('input', debouncedSearchMessageGroups);
 
     // 点击页面其他地方隐藏下拉列表
     document.addEventListener('click', (event) => {
         if (!searchInput.contains(event.target) && !dropdown.contains(event.target)) {
             hideDropdown();
+        }
+        if (!messageSearchInput.contains(event.target) && !messageDropdown.contains(event.target)) {
+            hideMessageDropdown();
         }
     });
 
@@ -481,19 +600,17 @@ document.addEventListener('DOMContentLoaded', () => {
          // 封装同步内容的逻辑
         function syncEditorContents(form) {
             const formData = new FormData(form);
-            // 根据媒体类型添加 media_url
-            const mediaTypeSelect = document.getElementById('media-type');
-            const imageLinkInput = document.getElementById('image-link');
-            const videoLinkInput = document.getElementById('video-link');
-            let selectedValue = mediaTypeSelect.value;
-            if (selectedValue === 'none') {
-                selectedValue = ''; // 如果没有选择，则设置为空字符串
-            }
-            formData.append('media_type', selectedValue);
-            if (selectedValue === 'image' && imageLinkInput) {
-                formData.append('media_url', imageLinkInput.value);
-            } else if (selectedValue === 'video' && videoLinkInput) {
-                formData.append('media_url', videoLinkInput.value);
+            // 处理媒体内容
+            const mediaType = document.getElementById('media-type').value;
+            if (mediaType && mediaType !== 'none') {
+                formData.set('media_type', mediaType);
+                const mediaUrl = mediaType === 'image' ? 
+                    document.getElementById('image-link')?.value : 
+                    document.getElementById('video-link')?.value;
+                    
+                if (mediaUrl) {
+                    formData.set('media_url', mediaUrl);
+                }
             }
             // 同步抽奖文字说明编辑器内容到隐藏输入框
             const descriptionElement = document.getElementById('description');
@@ -501,6 +618,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 const descriptionText = descriptionEditor.root.textContent;
                 descriptionElement.value = descriptionText;
             } 
+            // 获取参与方式
+            const joinMethod = formData.get('join_method');
+            // 处理关键词参与方式
+            if (joinMethod === 'send_keywords_in_group') {
+                const keywordGroupId = document.getElementById('keyword_group_id')?.value;
+                const keyword = formData.get('keyword')?.trim();
+                if (keywordGroupId) {
+                    formData.set('keyword_group_id', keywordGroupId);
+                }
+                if (keyword) {
+                    formData.set('keyword', keyword);
+                }
+            }
+            // 处理群组发言参与方式
+            else if (joinMethod === 'send_messages_in_group') {
+                const messageGroupId = document.getElementById('message_group_id')?.value;
+                if (messageGroupId) {
+                    formData.set('message_group_id', messageGroupId);
+                }
+                const messageCount = formData.get('message_count');
+                const messageCheckTime = formData.get('message_check_time');
+                if (messageCount) {
+                    formData.set('message_count', messageCount);
+                }
+                if (messageCheckTime) {
+                    formData.set('message_check_time', messageCheckTime);
+                }
+            }
             // 获取需要成员加入的群或频道列表信息
             const groupTableBody = document.getElementById('group-table-body');
             const groupRows = groupTableBody.getElementsByTagName('tr');
@@ -526,6 +671,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const utcDrawTime = convertToUTC(localDrawTime);
                 formData.set('draw_time', utcDrawTime);  // 替换为UTC格式
                 
+            }else if (drawMethod === 'draw_when_full') {
+                const participantCount = formData.get('participant_count');
+                if (participantCount) {
+                    formData.set('participant_count', participantCount);
+                }
+            }
+            // 移除所有空值字段
+            for (const [key, value] of Array.from(formData.entries())) {
+                if (!value || value === 'none' || value === '') {
+                    formData.delete(key);
+                }
             }
             return formData;
         }
