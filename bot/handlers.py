@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 import aiohttp
+from bson import Int64
 from app.database import MongoDBConnection
 from bson.objectid import ObjectId 
 from config import YOUR_BOT
@@ -504,7 +505,7 @@ async def handle_keyword_participate(update: Update, context):
         now = datetime.now(timezone.utc)
         await db.participants.insert_one({
             'lottery_id': lottery['lottery_id'],
-            'user_id': user.id,
+            'user_id': Int64(user.id),
             'nickname': user.full_name,
             'username': user.username,
             'join_time': now,
@@ -656,7 +657,7 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
                 await db.message_counts.update_one(
                     {
                         'lottery_id': lottery_id,
-                        'user_id': user_id,
+                        'user_id': Int64(user_id),
                         'group_id': group_id
                     },
                     {
@@ -793,7 +794,7 @@ async def handle_message_count_participate(update: Update, context):
             now = datetime.now(timezone.utc)
             await db.participants.insert_one({
                 'lottery_id': lottery_id,
-                'user_id': user.id,
+                'user_id': Int64(user.id),
                 'nickname': user.full_name,
                 'username': user.username,
                 'join_time': now,

@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from app.database import MongoDBConnection
 from bot.callbacks import verify_follow
 from utils import logger
+from bson import Int64
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from bot.conversation import SELECTING_ACTION
@@ -40,7 +41,7 @@ async def create_lottery(user, context, chat_id):
         db = await MongoDBConnection.get_database()
         lottery_doc = {
             'id': lottery_id,
-            'creator_id': user.id,
+            'creator_id': Int64(user.id),
             'creator_name': user.first_name,
             'status': 'draft',
             'created_at': now,

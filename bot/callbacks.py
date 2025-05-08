@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from bson import Int64
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
@@ -400,13 +401,11 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 try:
                     await db.participants.insert_one({
                         'lottery_id': lottery_id,
-                        'user_id': user.id,
+                        'user_id': Int64(user.id),
                         'nickname': user.first_name,
                         'username': user.username,
                         'status': 'active',
-                        'join_time': now,
-                        'created_at': now,
-                        'updated_at': now
+                        'join_time': now
                     })
                     chat_type = query.message.chat.type
                     success_message = f"🎉 恭喜 {user.first_name} 成功参与抽奖《{lottery['title']}》！"

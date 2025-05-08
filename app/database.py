@@ -54,7 +54,7 @@ async def init_db():
                     'required': ['id', 'creator_id', 'status', 'created_at', 'updated_at'],
                     'properties': {
                         'id': {'bsonType': 'string'},
-                        'creator_id': {'bsonType': 'string'},
+                        'creator_id': {'bsonType': 'long'},
                         'creator_name': {'bsonType': 'string'},
                         'status': {
                             'enum': ['draft', 'creating', 'active', 'completed', 'cancelled']
@@ -125,7 +125,7 @@ async def init_db():
                     'required': ['lottery_id', 'user_id', 'nickname'],
                     'properties': {
                         'lottery_id': {'bsonType': 'string'},
-                        'user_id': {'bsonType': 'string'},
+                        'user_id': {'bsonType': 'long'},
                         'nickname': {'bsonType': 'string'},
                         'username': {'bsonType': 'string'},
                         'join_time': {'bsonType': 'date'}
@@ -138,7 +138,7 @@ async def init_db():
                     'required': ['lottery_id', 'user_id', 'group_id', 'message_count'],
                     'properties': {
                         'lottery_id': {'bsonType': 'string'},
-                        'user_id': {'bsonType': 'string'},
+                        'user_id': {'bsonType': 'long'},
                         'group_id': {'bsonType': 'string'},
                         'message_count': {'bsonType': 'int'},
                         'last_message_time': {'bsonType': 'date'}
@@ -239,7 +239,7 @@ async def check_db():
 COLLECTION_SCHEMAS = {
     'lotteries': {
         'id': str,
-        'creator_id': str,
+        'creator_id': int,
         'creator_name': str,
         'status': str,  # draft, creating, active, completed, cancelled
         'created_at': datetime,
@@ -278,14 +278,14 @@ COLLECTION_SCHEMAS = {
     },
     'participants': {
         'lottery_id': str,
-        'user_id': str,
+        'user_id': int,
         'nickname': str,
         'username': str,
         'join_time': datetime
     },
     'message_counts': {
         'lottery_id': str,
-        'user_id': str,
+        'user_id': int,
         'group_id': str,
         'message_count': int,
         'last_message_time': datetime
