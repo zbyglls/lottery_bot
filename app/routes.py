@@ -1,4 +1,5 @@
 
+from bson import Int64
 from fastapi import APIRouter, Request, Form, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -311,7 +312,7 @@ async def create_lottery(
         try:
             now = datetime.now(timezone.utc)
             await db.lotteries.update_one(
-                {'id': lottery_id, 'creator_id': creator_id},
+                {'id': lottery_id, 'creator_id': Int64(creator_id)},
                 {
                     '$set': {
                         'status': 'active',

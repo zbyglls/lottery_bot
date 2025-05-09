@@ -194,7 +194,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 pipeline = [
                     {
                         '$match': {
-                            'user_id': user_id
+                            'user_id': Int64(user_id)
                         }
                     },
                     {
@@ -327,7 +327,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 # 检查是否已参与
                 participant = await db.participants.find_one({
                     'lottery_id': lottery_id,
-                    'user_id': user.id
+                    'user_id': Int64(user.id)
                 })
                 if participant:
                     await query.message.edit_text("❌ 你已经参与过这个抽奖了")
@@ -397,7 +397,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         )
                         return
                 # 添加参与记录
-                now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+                now = datetime.now(timezone.utc)
                 try:
                     await db.participants.insert_one({
                         'lottery_id': lottery_id,
@@ -439,7 +439,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     return
                 _, lottery_id, group_id = parts
                 # 从数据库获取抽奖信息
-                logger.info(parts)
+                logger.info(lottery_id)
                 db = await MongoDBConnection.get_database()
                 lottery = await db.lottery_settings.find_one(
                     {'lottery_id': lottery_id},
