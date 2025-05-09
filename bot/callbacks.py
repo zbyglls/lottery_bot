@@ -460,10 +460,9 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         'require_username': 1
                     }
                 )
-                    
-                if  lottery:
+
+                if not lottery:
                     await query.message.reply_text("❌ 找不到抽奖信息")
-                    logger.info(await db.lottery_settings.find_one({'lottery_id': lottery_id}))
                     return
                 
                 # 获取奖品信息
