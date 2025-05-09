@@ -80,7 +80,7 @@ async def init_db():
                             ]
                         },
                         'join_method': {
-                            'enum': ['private_chat_bot', 'group_keyword', 'group_message']
+                            'enum': ['private_chat_bot', 'send_keywords_in_group', 'send_messages_in_group']
                         },
                         'keyword_group_id': {
                             'oneOf': [
@@ -283,10 +283,10 @@ COLLECTION_SCHEMAS = {
     'lottery_settings': {
         'lottery_id': str,
         'title': str,
-        'media_type': str,  # image or video
+        'media_type': str,  
         'media_url': str,
         'description': str,
-        'join_method': str, # private_chat, group_keyword, group-message
+        'join_method': str, 
         'keyword_group_id': str,
         'keyword': str,
         'message_group_id': str,
@@ -294,7 +294,7 @@ COLLECTION_SCHEMAS = {
         'message_check_time': int,
         'require_username': bool,
         'required_groups': list,
-        'draw_method': str,  # draw_when_full, draw_at_time
+        'draw_method': str,  
         'participant_count': int,
         'draw_time': datetime,
         'message_count_tracked': bool
