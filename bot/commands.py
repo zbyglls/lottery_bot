@@ -155,13 +155,14 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not lotteries:
             await update.message.reply_text("你还没有创建过抽奖活动。")
             return
-
+        
         # 构建抽奖列表消息
         message = "📋 你创建的最近抽奖活动：\n\n"
         for lottery in lotteries:
+            created_at = lottery['created_at'].strftime('%Y-%m-%d %H:%M:%S')
             message += f"🎲 {lottery['settings']['title']}\n"
             message += f"状态: {lottery['status']}\n"
-            message += f"创建时间: {lottery['created_at']}\n"
+            message += f"创建时间: {created_at}\n"
             message += f"管理链接: {YOUR_DOMAIN}/?lottery_id={lottery['id']}&user_id={user.id}\n\n"
 
         await update.message.reply_text(message)
