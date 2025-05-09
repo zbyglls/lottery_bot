@@ -54,7 +54,7 @@ async def check_lottery_draws():
                 },
                 {
                     '$project': {
-                        'lottery_id': 1,
+                        'id': 1,
                         'title': '$settings.title'
                     }
                 }
@@ -106,7 +106,7 @@ async def check_lottery_draws():
                 },
                 {
                     '$project': {
-                        'lottery_id': 1,
+                        'id': 1,
                         'title': '$settings.title',
                         'required_count': '$settings.participant_count',
                         'current_count': {'$first': '$participant_count.count'}
