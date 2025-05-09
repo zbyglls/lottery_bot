@@ -119,8 +119,8 @@ async def check_lottery_draws():
             # 处理定时开奖
             for lottery in time_draws:
                 try:
-                    logger.info(f"执行定时开奖: {lottery['title']} (ID: {lottery['lottery_id']})")
-                    await draw_lottery(bot, lottery['lottery_id'])
+                    logger.info(f"执行定时开奖: {lottery['title']} (ID: {lottery['id']})")
+                    await draw_lottery(bot, lottery['id'])
                     logger.info(f"定时开奖完成: {lottery['title']}")
                 except Exception as e:
                     logger.error(f"执行定时开奖 {lottery['title']} 时出错: {e}", exc_info=True)
@@ -130,10 +130,10 @@ async def check_lottery_draws():
                 try:
                     logger.info(
                         f"执行满人开奖: {lottery['title']} "
-                        f"(ID: {lottery['lottery_id']}, "
+                        f"(ID: {lottery['id']}, "
                         f"参与人数: {lottery['current_count']}/{lottery['required_count']})"
                     )
-                    await draw_lottery(bot, lottery['lottery_id'])
+                    await draw_lottery(bot, lottery['id'])
                     logger.info(f"满人开奖完成: {lottery['title']}")
                 except Exception as e:
                     logger.error(f"执行满人开奖 {lottery['title']} 时出错: {e}", exc_info=True)
