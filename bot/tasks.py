@@ -26,7 +26,7 @@ async def check_lottery_draws():
                 await asyncio.sleep(60)
                 continue
 
-            current_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+            current_time = datetime.now(timezone.utc)
             db = await MongoDBConnection.get_database()
             # 1. 查找定时开奖的抽奖
             pipeline_time = [
