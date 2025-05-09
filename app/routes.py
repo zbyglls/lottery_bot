@@ -309,20 +309,18 @@ async def create_lottery(
             })
             
         # 4. 更新抽奖状态
-        try:
-            now = datetime.now(timezone.utc)
-            await db.lotteries.update_one(
-                {'id': lottery_id, 'creator_id': Int64(creator_id)},
-                {
-                    '$set': {
-                        'status': 'active',
-                        'updated_at': now
-                    }
+
+        now = datetime.now(timezone.utc)
+        await db.lotteries.update_one(
+            {'id': lottery_id, 'creator_id': Int64(creator_id)},
+            {
+                '$set': {
+                    'status': 'active',
+                    'updated_at': now
                 }
-            )
-            logger.info(f"成功更新抽奖状态，ID: {lottery_id}")
-        except Exception as e:
-            logger.error(f"更新抽奖状态时出错: {e}", exc_info=True)
+            }
+        )
+
 
         logger.info(await db.lotteries.find_one({'id': lottery_id}))
         # 5. 创建抽奖设置

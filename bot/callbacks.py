@@ -133,7 +133,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
                     # 处理开奖方式显示
                     if settings['draw_method'] == 'draw_when_full':
-                        draw_info = f"👥 {current_count}/{settings['max_participants']}人"
+                        draw_info = f"👥 {current_count}/{settings['participant_count']}人"
                     else:
                         draw_info = f"⏰ {settings['draw_time']}"
 
@@ -464,7 +464,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 if  lottery:
                     await query.message.reply_text("❌ 找不到抽奖信息")
                     return
-
+                logger.info(await db.lottery_settings.find_one({'lottery_id': lottery_id}))
                 # 获取奖品信息
                 prizes = await db.prizes.find(
                     {'lottery_id': lottery_id},
