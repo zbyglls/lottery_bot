@@ -66,7 +66,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     {'id': lottery_id},
                     {'$set': {
                         'status': 'cancelled',
-                        'updated_at': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+                        'updated_at': datetime.now(timezone.utc)
                     }}
                 )
                     

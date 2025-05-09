@@ -160,7 +160,7 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = "📋 你创建的最近抽奖活动：\n\n"
         for lottery in lotteries:
             message += f"🎲 {lottery['settings']['title']}\n"
-            message += f"状态: {lottery['settings']['status']}\n"
+            message += f"状态: {lottery['status']}\n"
             message += f"创建时间: {lottery['settings']['created_at']}\n"
             message += f"管理链接: {YOUR_DOMAIN}/?lottery_id={lottery['lottery_id']}&user_id={user.id}\n\n"
 

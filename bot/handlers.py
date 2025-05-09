@@ -59,7 +59,7 @@ async def send_lottery_info_to_creator(creator_id: str, lottery_data: dict):
         ])
         required_name = lottery_data.get('require_username')
         # 获取所有必要群组信息
-        required_groups = lottery_data.get('required_groups', '').split(',')
+        required_groups = lottery_data.get('required_groups', [])
         keyword_group_id = lottery_data.get('keyword_group_id', '')
         keyword = lottery_data.get('keyword', '')
         message_group_id = lottery_data.get('message_group_id', '')
@@ -485,7 +485,7 @@ async def handle_keyword_participate(update: Update, context):
             return
             
         # 检查群组要求
-        required_groups = lottery.get('required_groups', '').split(',')
+        required_groups = lottery.get('required_groups', [])
         for group_id in required_groups:
             if group_id and group_id.strip():
                 try:
