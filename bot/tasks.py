@@ -151,7 +151,6 @@ async def cleanup_old_lotteries():
     try:
         # 计算一天前的时间
         one_day_ago = datetime.now(timezone.utc) - timedelta(days=1)
-        one_day_ago = one_day_ago.strftime('%Y-%m-%d %H:%M:%S')
         db = await MongoDBConnection.get_database()
         
         # 获取需要清理的抽奖
