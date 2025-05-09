@@ -308,7 +308,7 @@ async def create_lottery(
             })
             
         # 4. 更新抽奖状态
-        now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        now = datetime.now(timezone.utc)
         await db.lotteries.update_one(
             {'id': lottery_id, 'creator_id': creator_id},
             {

@@ -146,7 +146,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     keyboard.append([
                         InlineKeyboardButton(
                             f"参与 {settings['title']}", 
-                            callback_data=f'join_{lottery["lottery_id"]}'
+                            callback_data=f'join_{lottery["id"]}'
                         )
                     ])
 
@@ -200,7 +200,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     {
                         '$lookup': {
                             'from': 'lotteries',
-                            'localField': 'lottery_id',
+                            'localField': 'id',
                             'foreignField': 'lottery_id',
                             'as': 'lottery'
                         }
