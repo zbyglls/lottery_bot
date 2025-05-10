@@ -172,7 +172,7 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         # 构建抽奖列表消息
-        message = "📋 你创建的最近抽奖活动：\n\n"
+        message = "📋 你最近创建的抽奖活动：\n\n"
         for lottery in lotteries:
             created_at = lottery['created_at'].strftime('%Y-%m-%d %H:%M:%S')
             message += f"🎲 {lottery['title']}\n"
@@ -180,7 +180,10 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message += f"创建时间: {created_at}\n"
             message += f"管理链接: {YOUR_DOMAIN}/?lottery_id={lottery['id']}&user_id={user.id}\n\n"
 
-        await update.message.reply_text(message)
+        keybord = [
+            [ InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
+        ]
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keybord))
     except Exception as e:
         logger.error(f"处理 /mylottery 命令时出错: {e}", exc_info=True)
         await update.message.reply_text("获取抽奖列表时发生错误，请稍后重试。")

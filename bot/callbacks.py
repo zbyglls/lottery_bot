@@ -152,8 +152,10 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
                 # 添加返回按钮
                 keyboard.append(
-                    [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')],
-                    [ InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
+                    [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')]
+                )
+                keyboard.append(
+                    [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
                 )
 
                 await query.message.edit_text(
@@ -704,8 +706,10 @@ async def refresh_lottery_list(update: Update, context: ContextTypes.DEFAULT_TYP
 
             # 添加返回按钮
             keyboard.append(
-                [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')],
-                [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
+                [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')]
+            )
+            keyboard.append(
+                [InlineKeyboardButton("🔄 刷新列表", callback_data='refresh_lottery_list')]
             )
 
             try:
