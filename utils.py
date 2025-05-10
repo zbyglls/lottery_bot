@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 # 修改初始化组件定义
@@ -58,21 +58,18 @@ def mark_initialized(component: str, force: bool = False) -> bool:
 def parse_time(time_str: str) -> str:
     """解析开奖时间字符串"""
     try:
-        # 尝试解析 ISO 格式 (2025-04-21T16:01)
+        # 处理 ISO 格式时间字符串
         if 'T' in time_str:
-            # 新增UTC时间解析 (带Z或+00:00后缀)
-            if time_str.endswith('Z') or '+00:00' in time_str:
-                # 处理带毫秒的UTC时间格式 (2025-04-29T09:50:00.000Z)
-                if '.' in time_str and time_str.endswith('Z'):
-                    time = datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S.%fZ')
-                else:
-                    time = datetime.strptime(time_str, '%Y-%m-%dT%H:%M%z')
-            else:
-                time = datetime.strptime(time_str, '%Y-%m-%dT%H:%M')
-        # 尝试解析标准格式 (2025-04-21 16:01)
+            # 移除末尾的 Z 并解析
+            clean_time_str = time_str.rstrip('Z')
+            time = datetime.fromisoformat(clean_time_str)
         else:
-            time = datetime.strptime(time_str, '%Y-%m-%d %H:%M')
-        return time.strftime('%Y-%m-%d %H:%M:%S')
+            time = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
+            
+        # 确保时间有 UTC 时区
+        if time.tzinfo is None:
+            time = time.replace(tzinfo=timezone.utc)
+        return time
     except ValueError:
         logger.error(f"无效的时间格式: {time_str}")
         return "时间格式错误"

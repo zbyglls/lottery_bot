@@ -18,8 +18,8 @@ class MongoDBConnection:
             try:
                 client = AsyncIOMotorClient(
                     MONGO_URI,
-                    tls=True,
-                    tlsAllowInvalidCertificates=True,
+                #    tls=True,
+                #    tlsAllowInvalidCertificates=True,
                     serverSelectionTimeoutMS=30000,  
                     connectTimeoutMS=30000,
                     socketTimeoutMS=30000,

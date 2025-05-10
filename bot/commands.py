@@ -129,19 +129,34 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pipeline = [
             {
                 '$match': {
-                    'creator_id': user.id
+                    'creator_id': Int64(user.id)
                 }
             },
             {
                 '$lookup': {
                     'from': 'lottery_settings',
-                    'localField': 'lottery_id',
-                    'foreignField': 'id',
+                    'localField': 'id',
+                    'foreignField': 'lottery_id',
+                    'pipeline': [
+                        {
+                            '$project': {
+                                'title': 1
+                            }
+                        }
+                    ],
                     'as': 'settings'
                 }
             },
             {
                 '$unwind': '$settings'
+            },
+            {
+                '$project': {
+                    'id': 1,
+                    'title': '$settings.title',
+                    'status': 1,
+                    'created_at': 1
+                }
             },
             {
                 '$sort': {'created_at': -1}
@@ -160,7 +175,7 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = "📋 你创建的最近抽奖活动：\n\n"
         for lottery in lotteries:
             created_at = lottery['created_at'].strftime('%Y-%m-%d %H:%M:%S')
-            message += f"🎲 {lottery['settings']['title']}\n"
+            message += f"🎲 {lottery['title']}\n"
             message += f"状态: {lottery['status']}\n"
             message += f"创建时间: {created_at}\n"
             message += f"管理链接: {YOUR_DOMAIN}/?lottery_id={lottery['id']}&user_id={user.id}\n\n"

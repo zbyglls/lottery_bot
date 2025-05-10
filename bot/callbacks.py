@@ -91,8 +91,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     {
                         '$lookup': {
                             'from': 'lottery_settings',
-                            'localField': 'lottery_id',
-                            'foreignField': 'id',
+                            'localField': 'id',
+                            'foreignField': 'lottery_id',
                             'as': 'settings'
                         }
                     },
@@ -102,8 +102,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     {
                         '$lookup': {
                             'from': 'participants',
-                            'localField': 'lottery_id',
-                            'foreignField': 'id',
+                            'localField': 'id',
+                            'foreignField': 'lottery_id',
                             'pipeline': [{'$count': 'count'}],
                             'as': 'participant_count'
                         }
@@ -199,20 +199,16 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     },
                     {
                         '$lookup': {
-                            'from': 'lotteries',
-                            'localField': 'id',
-                            'foreignField': 'lottery_id',
-                            'as': 'lottery'
-                        }
-                    },
-                    {
-                        '$unwind': '$lottery'
-                    },
-                    {
-                        '$lookup': {
                             'from': 'lottery_settings',
                             'localField': 'lottery_id',
                             'foreignField': 'lottery_id',
+                            'pipeline': [
+                                {
+                                    '$project': {
+                                        'title': 1
+                                    }
+                                }
+                            ],
                             'as': 'settings'
                         }
                     },
@@ -221,18 +217,27 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     },
                     {
                         '$lookup': {
-                            'from': 'prize_winners',
-                            'localField': '_id',
-                            'foreignField': 'participant_id',
-                            'as': 'winner'
+                            'from': 'lotteries',
+                            'localField': 'lottery_id',
+                            'foreignField': 'id',
+                            'pipeline': [
+                                {
+                                    '$project': {
+                                        'status': 1
+                                    }
+                                }
+                            ],
+                            'as': 'lottery'
                         }
                     },
                     {
-                        '$lookup': {
-                            'from': 'prizes',
-                            'localField': 'winner.prize_id',
-                            'foreignField': '_id',
-                            'as': 'prize'
+                        '$unwind': '$lottery'
+                    },
+                    {
+                        '$project': {
+                            'title': '$settings.title',
+                            'status': '$lottery.status',
+                            'join_time': 1
                         }
                     },
                     {
@@ -254,7 +259,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         ]])
                     )
                     return
-
+                
                 message = "🎯 <b>我的抽奖记录</b>\n\n"
                 for record in records:
                     status_emoji = {
@@ -263,16 +268,11 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         'lost': '💔'
                     }.get(record['status'], '❓')
 
-                    prize_info = ""
-                    if record.get('prize'):
-                        prize = record['prize'][0]
-                        prize_info = f"🎁 奖品：{prize['name']}"
-
                     message += (
-                        f"📌 <b>{record['settings']['title']}</b>\n"
+                        f"📌 <b>{record['title']}</b>\n"
                         f"{status_emoji} 状态：{record['status']}\n"
                         f"⏰ 参与时间：{record['join_time'].strftime('%Y-%m-%d %H:%M:%S')}\n"
-                        f"{prize_info}\n\n"
+
                     )
 
                 # 添加导航按钮
@@ -534,11 +534,13 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     return
                 if chat.type == 'channel':
                     keyboard = [
-                        [InlineKeyboardButton("🎲 私聊机器人参与抽奖", url=f"https://t.me/{YOUR_BOT}?start=join_{lottery_id}")]
+                        [InlineKeyboardButton("🎲 私聊机器人参与抽奖", url=f"https://t.me/{YOUR_BOT}?start=join_{lottery_id}")],
+                        [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
                     ]
                 elif chat.type == 'group' or chat.type == 'supergroup':
                     keyboard = [
-                        [InlineKeyboardButton("🎲 参与抽奖", callback_data=f"join_{lottery_id}")]
+                        [InlineKeyboardButton("🎲 参与抽奖", callback_data=f"join_{lottery_id}")],
+                        [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
                     ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -642,8 +644,8 @@ async def refresh_lottery_list(update: Update, context: ContextTypes.DEFAULT_TYP
             {
                 '$lookup': {
                     'from': 'lottery_settings',
-                    'localField': 'lottery_id',
-                    'foreignField': 'id',
+                    'localField': 'id',
+                    'foreignField': 'lottery_id',
                     'as': 'settings'
                 }
             },
@@ -653,8 +655,8 @@ async def refresh_lottery_list(update: Update, context: ContextTypes.DEFAULT_TYP
             {
                 '$lookup': {
                     'from': 'participants',
-                    'localField': 'lottery_id',
-                    'foreignField': 'id',
+                    'localField': 'id',
+                    'foreignField': 'lottery_id',
                     'pipeline': [{'$count': 'count'}],
                     'as': 'participant_count'
                 }
@@ -694,7 +696,7 @@ async def refresh_lottery_list(update: Update, context: ContextTypes.DEFAULT_TYP
                 keyboard.append([
                     InlineKeyboardButton(
                         f"参与 {settings['title']}", 
-                        callback_data=f'join_{lottery["lottery_id"]}'  # Updated to use lottery["lottery_id"]
+                        callback_data=f'join_{lottery["id"]}'  # Updated to use lottery["lottery_id"]
                     )
                 ])
 

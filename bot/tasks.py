@@ -38,8 +38,8 @@ async def check_lottery_draws():
                 {
                     '$lookup': {
                         'from': 'lottery_settings',
-                        'localField': 'lottery_id',
-                        'foreignField': 'id',
+                        'localField': 'id',
+                        'foreignField': 'lottery_id',
                         'as': 'settings'
                     }
                 },
@@ -72,8 +72,8 @@ async def check_lottery_draws():
                 {
                     '$lookup': {
                         'from': 'lottery_settings',
-                        'localField': 'lottery_id',
-                        'foreignField': 'id',
+                        'localField': 'id',
+                        'foreignField': 'lottery_id',
                         'as': 'settings'
                     }
                 },
@@ -88,8 +88,8 @@ async def check_lottery_draws():
                 {
                     '$lookup': {
                         'from': 'participants',
-                        'localField': 'lottery_id',
-                        'foreignField': 'id',
+                        'localField': 'id',
+                        'foreignField': 'lottery_id',
                         'pipeline': [{'$count': 'count'}],
                         'as': 'participant_count'
                     }
@@ -164,8 +164,8 @@ async def cleanup_old_lotteries():
             {
                 '$lookup': {
                     'from': 'lottery_settings',
-                    'localField': 'lottery_id',
-                    'foreignField': 'id',
+                    'localField': 'id',
+                    'foreignField': 'lottery_id',
                     'as': 'settings'
                 }
             },
@@ -178,7 +178,7 @@ async def cleanup_old_lotteries():
         
         for lottery in old_lotteries:
             try:
-                lottery_id = lottery['lottery_id']
+                lottery_id = lottery['id']
                 title = lottery['settings']['title']
                 
                 # 删除相关记录

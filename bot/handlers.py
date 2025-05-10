@@ -224,7 +224,11 @@ async def send_winner_notification(winner_id: int, lottery_info: dict, prize_inf
         # 添加确认按钮
         keyboard = [[
             InlineKeyboardButton("📞 联系创建人", url=f"https://t.me/{lottery_info['creator_name']}")
-        ]]
+        ],
+        [
+            InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")
+        ]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         # 发送通知
@@ -324,7 +328,7 @@ async def send_lottery_result_to_group(winners: list, groups: list):
                 '$lookup': {
                     'from': 'lotteries',
                     'localField': 'lottery_id',
-                    'foreignField': 'lottery_id',
+                    'foreignField': 'id',
                     'as': 'lottery'
                 }
             },
@@ -402,8 +406,12 @@ async def send_lottery_result_to_group(winners: list, groups: list):
         message += (
             f"\n\n🤖 机器人推荐：\n"
             f"使用 @{YOUR_BOT} 轻松创建抽奖"
+            f"以下内容为广告\n"
         )
-
+        keyboard = [[
+            InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")
+        ]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         # 发送消息到群组
         logger.info(f"准备发送开奖结果到群组: {groups}")
         for group_id in groups:
@@ -412,7 +420,8 @@ async def send_lottery_result_to_group(winners: list, groups: list):
                     chat_id=group_id,
                     text=message,
                     parse_mode='HTML',
-                    disable_web_page_preview=True
+                    disable_web_page_preview=True,
+                    reply_markup=reply_markup
                 )
                 logger.info(f"已发送开奖结果到群组 {group_id}")
             except Exception as e:
@@ -502,7 +511,7 @@ async def handle_keyword_participate(update: Update, context):
                     continue
 
         # 添加参与记录
-        now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        now = datetime.now(timezone.utc)
         await db.participants.insert_one({
             'lottery_id': lottery['lottery_id'],
             'user_id': Int64(user.id),
@@ -624,13 +633,13 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
 
         # 检查当前消息
         current_message = update.message if update else None
-        current_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        current_time = datetime.now(timezone.utc)
 
         # 获取用户现有的消息计数
         message_record = await db.message_counts.find_one({
             'lottery_id': lottery_id,
-            'user_id': user_id,
-            'group_id': group_id
+            'user_id': Int64(user_id),
+            'group_id': str(group_id)
         })
 
         if message_record:
@@ -649,7 +658,7 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
             # 检查消息时间是否在有效期内
             check_start_time = current_time - timedelta(hours=check_hours)
             if current_time >= check_start_time:
-                current_time = current_time.strftime('%Y-%m-%d %H:%M:%S')
+                current_time = current_time
                 message_count += 1
                 logger.info(f"用户 {user_id} 新增一条有效消息，当前数量: {message_count}")
 
@@ -658,7 +667,7 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
                     {
                         'lottery_id': lottery_id,
                         'user_id': Int64(user_id),
-                        'group_id': group_id
+                        'group_id': str(group_id)
                     },
                     {
                         '$set': {
@@ -712,7 +721,7 @@ async def handle_message_count_participate(update: Update, context):
             {
                 '$lookup': {
                     'from': 'lotteries',
-                    'localField': 'lottery_id',
+                    'localField': 'id',
                     'foreignField': 'lottery_id',
                     'as': 'lottery'
                 }
@@ -747,7 +756,7 @@ async def handle_message_count_participate(update: Update, context):
             # 检查重复参与
             existing = await db.participants.find_one({
                 'lottery_id': lottery_id,
-                'user_id': user.id
+                'user_id': Int64(user.id)
             })
             
             if existing:
@@ -791,7 +800,7 @@ async def handle_message_count_participate(update: Update, context):
                 return
 
             # 添加参与记录
-            now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+            now = datetime.now(timezone.utc)
             await db.participants.insert_one({
                 'lottery_id': lottery_id,
                 'user_id': Int64(user.id),

@@ -31,7 +31,7 @@
         <div id="basic-info" class="block">
             <form id="lottery-form" method="post" action="/create_lottery" enctype="multipart/form-data" novalidate>
                 <input type="hidden" name="creator_id" value="{{ creator_info.user_id }}">
-                <input type="hidden" name="lottery_id" value="{{ creator_info.lottery_id }}">
+                <input type="hidden" id="lottery_id" name="lottery_id" value="{{ creator_info.lottery_id }}">
                 <div class="mb-4">
                     <label for="title" class="block text-gray-700 font-bold mb-2">抽奖标题</label>
                     <input type="text" id="title" name="title" class="border border-gray-400 p-2 w-full" required>

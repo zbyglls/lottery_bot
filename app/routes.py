@@ -84,7 +84,7 @@ async def get_lottery_info(lottery_id):
         # 处理开奖时间
         draw_time = setting.get('draw_time')
         if setting.get('draw_method') == 'draw_at_time':
-            draw_time = parse_time(draw_time)
+            draw_time = draw_time.strftime('%Y-%m-%d %H:%M:%S')
         elif setting.get('draw_method') == 'draw_when_full':
             draw_time = f"满{setting.get('participant_count')}人后自动开奖"
             
@@ -525,7 +525,7 @@ async def cancel_lottery(request: Request, lottery_id: str):
             {
                 '$set': {
                     'status': 'cancelled',
-                    'updated_at': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+                    'updated_at': datetime.now(timezone.utc)
                 }
             }
         )
