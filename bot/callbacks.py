@@ -151,9 +151,10 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     ])
 
                 # 添加返回按钮
-                keyboard.append([
-                    InlineKeyboardButton("🔙 返回", callback_data='back_to_main')
-                ])
+                keyboard.append(
+                    [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')],
+                    [ InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
+                )
 
                 await query.message.edit_text(
                     message,
@@ -278,7 +279,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 # 添加导航按钮
                 keyboard = [
                     [InlineKeyboardButton("👀 查看更多抽奖", callback_data='view_lotteries')],
-                    [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')]
+                    [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')],
+                    [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
                 ]
 
                 await query.message.edit_text(
