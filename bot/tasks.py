@@ -162,44 +162,44 @@ async def cleanup_old_lotteries():
                     'updated_at': {'$lt': one_day_ago}
                 }
             },
-            {
-                # 先获取基本信息
-                '$project': {
-                    'id': 1,
-                    'status': 1,
-                    'updated_at': 1
-                }
-            },
-            {
-                '$lookup': {
-                    'from': 'lottery_settings',
-                    'localField': 'id',
-                    'foreignField': 'lottery_id',
-                    'pipeline': [
-                        {
-                            '$project': {
-                                'title': 1,
-                                '_id': 0
-                            }
-                        }
-                    ],
-                    'as': 'settings'
-                }
-            },
-            {
-                # 确保有关联的设置记录
-                '$match': {
-                    'settings': {'$ne': []}
-                }
-            },
-            {
-                '$unwind': '$settings'
-            },
+            # {
+            #     # 先获取基本信息
+            #     '$project': {
+            #         'id': 1,
+            #         'status': 1,
+            #         'updated_at': 1
+            #     }
+            # },
+            # {
+            #     '$lookup': {
+            #         'from': 'lottery_settings',
+            #         'localField': 'id',
+            #         'foreignField': 'lottery_id',
+            #         'pipeline': [
+            #             {
+            #                 '$project': {
+            #                     'title': 1,
+            #                     '_id': 0
+            #                 }
+            #             }
+            #         ],
+            #         'as': 'settings'
+            #     }
+            # },
+            # {
+            #     # 确保有关联的设置记录
+            #     '$match': {
+            #         'settings': {'$ne': []}
+            #     }
+            # },
+            # {
+            #     '$unwind': '$settings'
+            # },
             {
                 # 最终输出格式
                 '$project': {
                     'id': 1,
-                    'title': '$settings.title',
+                #    'title': '$settings.title',
                     'status': 1,
                     'updated_at': 1
                 }
