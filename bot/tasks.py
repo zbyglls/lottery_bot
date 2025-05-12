@@ -175,12 +175,12 @@ async def cleanup_old_lotteries():
         ]
         
         old_lotteries = await db.lotteries.aggregate(pipeline).to_list(None)
-        
+        logger.info(f"需要清理的抽奖活动: {old_lotteries}")
         for lottery in old_lotteries:
             try:
                 lottery_id = lottery['id']
                 title = lottery['settings']['title']
-                
+                logger.info(f"清理抽奖活动: {title} (ID: {lottery_id}, 状态: {lottery['status']})")
                 # 删除相关记录
                 await asyncio.gather(
                     db.prize_winners.delete_many({'lottery_id': lottery_id}),
