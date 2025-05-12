@@ -153,7 +153,7 @@ async def cleanup_old_lotteries():
         one_day_ago = datetime.now(timezone.utc) - timedelta(days=1)
         db = await MongoDBConnection.get_database()
         
-        logger.debug(f"清理时间点: {one_day_ago}")
+
         # 获取需要清理的抽奖
         pipeline = [
             {
@@ -162,44 +162,44 @@ async def cleanup_old_lotteries():
                     'updated_at': {'$lt': one_day_ago}
                 }
             },
-            # {
-            #     # 先获取基本信息
-            #     '$project': {
-            #         'id': 1,
-            #         'status': 1,
-            #         'updated_at': 1
-            #     }
-            # },
-            # {
-            #     '$lookup': {
-            #         'from': 'lottery_settings',
-            #         'localField': 'id',
-            #         'foreignField': 'lottery_id',
-            #         'pipeline': [
-            #             {
-            #                 '$project': {
-            #                     'title': 1,
-            #                     '_id': 0
-            #                 }
-            #             }
-            #         ],
-            #         'as': 'settings'
-            #     }
-            # },
-            # {
-            #     # 确保有关联的设置记录
-            #     '$match': {
-            #         'settings': {'$ne': []}
-            #     }
-            # },
-            # {
-            #     '$unwind': '$settings'
-            # },
+            {
+                # 先获取基本信息
+                '$project': {
+                    'id': 1,
+                    'status': 1,
+                    'updated_at': 1
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'lottery_settings',
+                    'localField': 'id',
+                    'foreignField': 'lottery_id',
+                    'pipeline': [
+                        {
+                            '$project': {
+                                'title': 1,
+                                '_id': 0
+                            }
+                        }
+                    ],
+                    'as': 'settings'
+                }
+            },
+            {
+                # 确保有关联的设置记录
+                '$match': {
+                    'settings': {'$ne': []}
+                }
+            },
+            {
+                '$unwind': '$settings'
+            },
             {
                 # 最终输出格式
                 '$project': {
                     'id': 1,
-                #    'title': '$settings.title',
+                    'title': '$settings.title',
                     'status': 1,
                     'updated_at': 1
                 }
@@ -207,15 +207,13 @@ async def cleanup_old_lotteries():
         ]
         
         old_lotteries = await db.lotteries.aggregate(pipeline).to_list(None)
-        logger.info(f"找到 {len(old_lotteries)} 条需要清理的抽奖记录")
-        logger.info(f"需要清理的抽奖活动: {old_lotteries}")
+
         
         for lottery in old_lotteries:
             try:
                 lottery_id = lottery['id']
-            #    title = lottery['settings']['title']
-                title = '测试删除'
-                logger.info(f"清理抽奖活动: {title} (ID: {lottery_id}, 状态: {lottery['status']})")
+                title = lottery['settings']['title']
+
                 # 删除相关记录
                 delete_results = await asyncio.gather(
                     db.prize_winners.delete_many({'lottery_id': lottery_id}),
@@ -225,10 +223,9 @@ async def cleanup_old_lotteries():
                     db.lotteries.delete_one({'id': lottery_id})
                 )
                 
-                logger.info(f"已清理抽奖记录: {title} (ID: {lottery_id}, 状态: {lottery['status']})")
-                                # 记录删除结果
+                # 记录删除结果
                 logger.info(
-                    f"已清理抽奖: {title} (ID: {lottery_id})\n"
+                    f"已清理抽奖: {title} (ID: {lottery_id}, 状态: {lottery['status']})\n"
                     f"- 中奖记录: {delete_results[0].deleted_count}\n"
                     f"- 参与记录: {delete_results[1].deleted_count}\n"
                     f"- 奖品记录: {delete_results[2].deleted_count}\n"
