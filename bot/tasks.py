@@ -212,7 +212,7 @@ async def cleanup_old_lotteries():
         for lottery in old_lotteries:
             try:
                 lottery_id = lottery['id']
-                title = lottery['settings']['title']
+                title = lottery['title']
 
                 # 删除相关记录
                 delete_results = await asyncio.gather(

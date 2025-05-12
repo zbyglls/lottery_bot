@@ -598,44 +598,17 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
         required_count: 要求的发言数量
         check_hours: 检查时间范围(小时)
         lottery_id: 抽奖ID
+        update: 可选的消息更新对象
 
     Returns:
         bool: 是否满足发言要求
     """
     try:
         db = await MongoDBConnection.get_database()
-        # 获取抽奖发布时间和跟踪状态
-        lottery = await db.lotteries.find_one(
-            {'id': lottery_id},
-            {
-                'updated_at': 1,
-                'message_count_tracked': 1
-            }
-        )
-            
-        if not lottery:
-            logger.error(f"未找到抽奖 {lottery_id}")
-            return False
-            
-        publish_time = lottery.get('updated_at')
-        message_count_tracked = lottery.get('message_count_tracked', False)
-
-        # 如果还没有开始跟踪消息，创建消息跟踪记录
-        if not message_count_tracked:
-            try:
-                await db.lotteries.update_one(
-                    {'id': lottery_id},
-                    {'$set': {'message_count_tracked': True}}
-                )
-            except Exception as e:
-                logger.error(f"创建消息计数表时出错: {e}")
-                return False
-
-        # 检查当前消息
-        current_message = update.message if update else None
         current_time = datetime.now(timezone.utc)
-
-        # 获取用户现有的消息计数
+        check_start_time = current_time - timedelta(hours=check_hours)
+        
+        # 获取消息记录
         message_record = await db.message_counts.find_one({
             'lottery_id': lottery_id,
             'user_id': Int64(user_id),
@@ -643,22 +616,37 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
         })
 
         if message_record:
-            message_count = message_record.get('message_count', 0)
-            last_message_time = message_record.get('last_message_time', publish_time)
+            # 检查是否超时
+            last_message_time = message_record.get('last_message_time')
+            if last_message_time:
+                # 如果时间没有时区信息，添加 UTC 时区
+                if last_message_time.tzinfo is None:
+                    last_message_time = last_message_time.replace(tzinfo=timezone.utc)
+                  
+                if last_message_time and last_message_time < check_start_time:
+                    # 超时清除记录
+                    logger.info(f"用户 {user_id} 的发言记录已超时，清除记录")
+                    await db.message_counts.delete_one({
+                        'lottery_id': lottery_id,
+                        'user_id': Int64(user_id),
+                        'group_id': str(group_id)
+                    })
+                    message_count = 0
+                else:
+                    message_count = message_record.get('message_count', 0)
+            else:
+                message_count = message_record.get('message_count', 0)
         else:
             message_count = 0
-            last_message_time = publish_time
 
         # 如果有新消息且是文本消息，增加计数
-        if (current_message and 
-            current_message.text and 
-            current_message.chat.id == int(group_id) and 
-            current_message.from_user.id == user_id):
-                
-            # 检查消息时间是否在有效期内
-            check_start_time = current_time - timedelta(hours=check_hours)
-            if current_time >= check_start_time:
-                current_time = current_time
+        if (update and update.message and 
+            update.message.text and 
+            str(update.message.chat.id) == str(group_id) and 
+            update.message.from_user.id == user_id):
+            
+            message_time = update.message.date.replace(tzinfo=timezone.utc)
+            if message_time >= check_start_time:
                 message_count += 1
                 logger.info(f"用户 {user_id} 新增一条有效消息，当前数量: {message_count}")
 
@@ -672,7 +660,7 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
                     {
                         '$set': {
                             'message_count': message_count,
-                            'last_message_time': current_time,
+                            'last_message_time': message_time,
                             'updated_at': current_time
                         },
                         '$setOnInsert': {
@@ -682,13 +670,15 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
                     upsert=True
                 )
 
-            # 检查是否达到要求
-            if message_count >= required_count:
-                logger.info(f"用户 {user_id} 已达到发言要求: {message_count}/{required_count}")
-                return True
+        # 检查是否达到要求
+        if message_count >= required_count:
+            logger.info(f"用户 {user_id} 已达到发言要求: {message_count}/{required_count}")
+            return True
 
+        # 如果发言数量不足且超过时间范围，返回 False
+        if message_count > 0:
             logger.info(f"用户 {user_id} 发言数量不足: {message_count}/{required_count}")
-            return False
+        return False
 
     except Exception as e:
         logger.error(f"检查用户发言数量时出错: {e}", exc_info=True)
