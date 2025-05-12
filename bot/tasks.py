@@ -153,12 +153,21 @@ async def cleanup_old_lotteries():
         one_day_ago = datetime.now(timezone.utc) - timedelta(days=1)
         db = await MongoDBConnection.get_database()
         
+        logger.debug(f"清理时间点: {one_day_ago}")
         # 获取需要清理的抽奖
         pipeline = [
             {
                 '$match': {
                     'status': {'$in': ['completed', 'cancelled']},
-                    'updated_at': {'$lte': one_day_ago}
+                    'updated_at': {'$lt': one_day_ago}
+                }
+            },
+            {
+                # 先获取基本信息
+                '$project': {
+                    'id': 1,
+                    'status': 1,
+                    'updated_at': 1
                 }
             },
             {
@@ -166,23 +175,48 @@ async def cleanup_old_lotteries():
                     'from': 'lottery_settings',
                     'localField': 'id',
                     'foreignField': 'lottery_id',
+                    'pipeline': [
+                        {
+                            '$project': {
+                                'title': 1,
+                                '_id': 0
+                            }
+                        }
+                    ],
                     'as': 'settings'
                 }
             },
             {
+                # 确保有关联的设置记录
+                '$match': {
+                    'settings': {'$ne': []}
+                }
+            },
+            {
                 '$unwind': '$settings'
+            },
+            {
+                # 最终输出格式
+                '$project': {
+                    'id': 1,
+                    'title': '$settings.title',
+                    'status': 1,
+                    'updated_at': 1
+                }
             }
         ]
         
         old_lotteries = await db.lotteries.aggregate(pipeline).to_list(None)
+        logger.info(f"找到 {len(old_lotteries)} 条需要清理的抽奖记录")
         logger.info(f"需要清理的抽奖活动: {old_lotteries}")
+        
         for lottery in old_lotteries:
             try:
                 lottery_id = lottery['id']
                 title = lottery['settings']['title']
                 logger.info(f"清理抽奖活动: {title} (ID: {lottery_id}, 状态: {lottery['status']})")
                 # 删除相关记录
-                await asyncio.gather(
+                delete_results = await asyncio.gather(
                     db.prize_winners.delete_many({'lottery_id': lottery_id}),
                     db.participants.delete_many({'lottery_id': lottery_id}),
                     db.prizes.delete_many({'lottery_id': lottery_id}),
@@ -191,6 +225,15 @@ async def cleanup_old_lotteries():
                 )
                 
                 logger.info(f"已清理抽奖记录: {title} (ID: {lottery_id}, 状态: {lottery['status']})")
+                                # 记录删除结果
+                logger.info(
+                    f"已清理抽奖: {title} (ID: {lottery_id})\n"
+                    f"- 中奖记录: {delete_results[0].deleted_count}\n"
+                    f"- 参与记录: {delete_results[1].deleted_count}\n"
+                    f"- 奖品记录: {delete_results[2].deleted_count}\n"
+                    f"- 设置记录: {delete_results[3].deleted_count}\n"
+                    f"- 抽奖记录: {delete_results[4].deleted_count}"
+                )
                 
             except Exception as e:
                 logger.error(f"清理抽奖 {title} (ID: {lottery_id}) 时出错: {e}", exc_info=True)
