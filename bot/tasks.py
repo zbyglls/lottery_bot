@@ -172,18 +172,7 @@ async def cleanup_old_lotteries():
             }
         ]
         
-        pipe = [
-            {
-                '$match': {
-                    'lottery_id': lottery_id,
-                }
-            },
-            {
-                '$project': {
-                    'title': 1
-                }
-            }
-        ]
+        
         old_lotteries = await db.lotteries.aggregate(pipeline).to_list(None)
 
         
