@@ -169,50 +169,45 @@ async def cleanup_old_lotteries():
                     'status': 1,
                     'updated_at': 1
                 }
-            },
-            {
-                '$lookup': {
-                    'from': 'lottery_settings',
-                    'localField': 'id',
-                    'foreignField': 'lottery_id',
-                    'pipeline': [
-                        {
-                            '$project': {
-                                'title': 1,
-                                '_id': 0
-                            }
-                        }
-                    ],
-                    'as': 'settings'
-                }
-            },
-            {
-                # 确保有关联的设置记录
-                '$match': {
-                    'settings': {'$ne': []}
-                }
-            },
-            {
-                '$unwind': '$settings'
-            },
-            {
-                # 最终输出格式
-                '$project': {
-                    'id': 1,
-                    'title': '$settings.title',
-                    'status': 1,
-                    'updated_at': 1
-                }
             }
         ]
         
+        pipe = [
+            {
+                '$match': {
+                    'lottery_id': lottery_id,
+                }
+            },
+            {
+                '$project': {
+                    'title': 1
+                }
+            }
+        ]
         old_lotteries = await db.lotteries.aggregate(pipeline).to_list(None)
 
         
         for lottery in old_lotteries:
+            
             try:
                 lottery_id = lottery['id']
-                title = lottery['title']
+                pipe = [
+                    {
+                        '$match': {
+                            'lottery_id': lottery_id,
+                        }
+                    },
+                    {
+                        '$project': {
+                            'title': 1
+                        }
+                    }
+                ]
+                title = await db.lottery_settings.find_one(pipe)
+                if title:
+                    title = title['title']
+                else:
+                    title = None
 
                 # 删除相关记录
                 delete_results = await asyncio.gather(

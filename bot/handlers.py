@@ -226,7 +226,7 @@ async def send_winner_notification(winner_id: int, lottery_info: dict, prize_inf
             InlineKeyboardButton("📞 联系创建人", url=f"https://t.me/{lottery_info['creator_name']}")
         ],
         [
-            InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")
+            InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/index?agent_id=b7b9c654d9c97709b967e505d8255dd7")
         ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -409,7 +409,7 @@ async def send_lottery_result_to_group(winners: list, groups: list):
             f"以下内容为广告\n"
         )
         keyboard = [[
-            InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")
+            InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/index?agent_id=b7b9c654d9c97709b967e505d8255dd7")
         ]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         # 发送消息到群组
@@ -435,15 +435,15 @@ async def handle_keyword_participate(update: Update, context):
     try:
         message = update.message
         if not message or not message.text:
-            if not message:
-                logger.error("update.message 为空")
-                return
-            if not message.text:
-                logger.error("message.text 为空")
             return
         
         # 获取发送者信息
         user = message.from_user
+        if not user or not user.is_bot:
+            return
+        if message.forward:
+            return
+        
         chat_id = message.chat.id
         logger.info(f"收到消息: {message.text} from {user.full_name} in chat {chat_id}")
         # 检查是否是群组消息
@@ -693,6 +693,10 @@ async def handle_message_count_participate(update: Update, context):
             return
             
         user = message.from_user
+        if not user or user.is_bot:
+            return
+        if message.forward:
+            return
         chat_id = message.chat.id
         
         # 检查是否是群组消息
@@ -849,6 +853,6 @@ def register_handlers(app):
     """注册所有非命令处理器"""
     logger.info("开始注册处理器")
     app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO, handle_media_message))
-    app.add_handler(MessageHandler(filters.TEXT & (filters.GroupChat | filters.SUPERGROUP), handle_keyword_participate))
-    app.add_handler(MessageHandler(filters.TEXT & (filters.GroupChat | filters.SUPERGROUP), handle_message_count_participate))
+    app.add_handler(MessageHandler(filters.TEXT & (filters.GroupChat | filters.SUPERGROUP) & ~filters.FORWARDED & ~filters.Bot, handle_keyword_participate))
+    app.add_handler(MessageHandler(filters.TEXT & (filters.GroupChat | filters.SUPERGROUP) & ~filters.FORWARDED & ~filters.Bot, handle_message_count_participate))
     logger.info("处理器注册完成")

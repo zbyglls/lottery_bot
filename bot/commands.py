@@ -8,28 +8,84 @@ from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, Mes
 from bot.conversation import SELECTING_ACTION
 from config import YOUR_DOMAIN
 from bot.verification import check_channel_subscription, check_lottery_creation
+from bot.callbacks import handle_callback_query
 from bot.handlers import handle_keyword_participate, handle_media_message, handle_message_count_participate
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /start 命令"""
-    user = update.effective_user
-    welcome_message = (
-        f"👋 你好 {user.first_name}!\n\n"
-        "欢迎使用抽奖机器人。你可以：\n"
-        "1. 查看当前正在进行的抽奖\n"
-        "2. 参与抽奖活动\n"
-        "3. 查看我的抽奖记录"
-    )
+    try:
+        message = update.message
+        args = message.text.split()
+        # 检查是否有参数
+        if len(args) > 1 and args[1].startswith('join_'):
+            # 提取抽奖 ID
+            lottery_id = args[1].replace('join_', '')
+            
+            # 创建模拟的 callback_query 对象
+            class FakeCallbackQuery:
+                def __init__(self, data, message, user):
+                    self.data = data
+                    self.message = message
+                    self.from_user = user
+                    self.id = "fake_query_" + str(message.message_id)
+                    
+                async def answer(self, text=None, show_alert=False):
+                    if text:
+                        await self.message.reply_text(text)
+                    
+                async def edit_message_text(self, text, reply_markup=None, parse_mode=None):
+                    try:
+                        return await self.message.edit_text(
+                            text,
+                            reply_markup=reply_markup,
+                            parse_mode=parse_mode
+                        )
+                    except Exception as e:
+                        return await self.message.reply_text(
+                            text,
+                            reply_markup=reply_markup,
+                            parse_mode=parse_mode
+                        )
+                    
+            # 创建模拟的 Update 对象
+            class FakeUpdate:
+                def __init__(self, callback_query):
+                    self.callback_query = callback_query
+                    self.effective_user = callback_query.from_user
+                    
+            # 创建模拟对象
+            fake_query = FakeCallbackQuery(
+                data=f'join_{lottery_id}',
+                message=message,
+                user=message.from_user
+            )
+            fake_update = FakeUpdate(fake_query)
+            
+            # 使用模拟的 Update 对象调用回调处理
+            await handle_callback_query(fake_update, context)
+            return
+        
+        # 默认欢迎消息
+        welcome_message = (
+            f"👋 你好 {message.from_user.first_name}!\n\n"
+            "欢迎使用抽奖机器人。你可以：\n"
+            "1. 查看当前正在进行的抽奖\n"
+            "2. 参与抽奖活动\n"
+            "3. 查看我的抽奖记录"
+        )
     
-    keyboard = [
-        [InlineKeyboardButton("查看抽奖活动", callback_data='view_lotteries')],
-        [InlineKeyboardButton("我的抽奖记录", callback_data='my_records')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(welcome_message, reply_markup=reply_markup)
-    return SELECTING_ACTION
+        keyboard = [
+            [InlineKeyboardButton("查看抽奖活动", callback_data='view_lotteries')],
+            [InlineKeyboardButton("我的抽奖记录", callback_data='my_records')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await message.reply_text(welcome_message, reply_markup=reply_markup)
+        # return SELECTING_ACTION
+    except Exception as e:
+        logger.error(f"处理 start 命令时出错: {e}", exc_info=True)
+        await message.reply_text("❌ 处理命令时出错，请稍后重试")
 
 async def create_lottery(user, context, chat_id):
     """创建抽奖的核心逻辑"""
@@ -181,7 +237,7 @@ async def mylottery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message += f"管理链接: {YOUR_DOMAIN}/?lottery_id={lottery['id']}&user_id={user.id}\n\n"
 
         keybord = [
-            [ InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
+            [ InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/index?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
         ]
         await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keybord))
     except Exception as e:

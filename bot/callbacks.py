@@ -39,6 +39,7 @@ async def verify_follow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理按钮回调"""
     query = update.callback_query
+
     try:
         # 解析回调数据
         db = await MongoDBConnection.get_database()
@@ -155,7 +156,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')]
                 )
                 keyboard.append(
-                    [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
+                    [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/index?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
                 )
 
                 await query.message.edit_text(
@@ -282,7 +283,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 keyboard = [
                     [InlineKeyboardButton("👀 查看更多抽奖", callback_data='view_lotteries')],
                     [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')],
-                    [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
+                    [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/index?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
                 ]
 
                 await query.message.edit_text(
@@ -420,13 +421,16 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                             text=success_message
                         )
                     else:
-                        await context.bot.send_message(
-                            chat_id=query.message.chat_id,
-                            text=success_message
-                        )
-                        # 刷新抽奖列表
-                        await refresh_lottery_list(update, context)
-                        await query.message.delete()  # 删除临时提示消息
+                        try:
+                            await context.bot.send_message(
+                                chat_id=query.message.chat_id,
+                                text=success_message
+                            )
+
+                            # 刷新抽奖列表
+                            await refresh_lottery_list(update, context)
+                        except Exception as e:
+                            logger.error(f"处理消息更新时出错: {e}", exc_info=True)
                 except Exception as e:
                     logger.error(f"保存参与记录时出错: {e}", exc_info=True)
                     await query.message.reply_text("❌ 参与失败，请稍后重试")
@@ -539,12 +543,12 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 if chat.type == 'channel':
                     keyboard = [
                         [InlineKeyboardButton("🎲 私聊机器人参与抽奖", url=f"https://t.me/{YOUR_BOT}?start=join_{lottery_id}")],
-                        [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
+                        [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/index?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
                     ]
                 elif chat.type == 'group' or chat.type == 'supergroup':
                     keyboard = [
                         [InlineKeyboardButton("🎲 参与抽奖", callback_data=f"join_{lottery_id}")],
-                        [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/province_tag?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
+                        [InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/index?agent_id=b7b9c654d9c97709b967e505d8255dd7")]
                     ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -705,30 +709,54 @@ async def refresh_lottery_list(update: Update, context: ContextTypes.DEFAULT_TYP
                 ])
 
             # 添加返回按钮
-            keyboard.append(
-                [InlineKeyboardButton("🔙 返回", callback_data='back_to_main')]
-            )
-            keyboard.append(
-                [InlineKeyboardButton("🔄 刷新列表", callback_data='refresh_lottery_list')]
-            )
+            keyboard.append([InlineKeyboardButton("🔙 返回", callback_data='back_to_main')])
+            keyboard.append([InlineKeyboardButton("🛒流量套餐", url="https://hy.yunhaoka.com/#/pages/micro_store/index?agent_id=b7b9c654d9c97709b967e505d8255dd7")])
+            reply_markup = InlineKeyboardMarkup(keyboard)
 
             try:
+                # 尝试编辑消息
                 await query.message.edit_text(
                     message,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    reply_markup=reply_markup,
                     parse_mode='HTML'
                 )
             except BadRequest as e:
                 if "Message is not modified" in str(e):
                     # 消息内容未改变，这是正常的，可以忽略
                     await query.answer("列表已是最新")
+                elif "Message can't be edited" in str(e):
+                    # 消息无法编辑，发送新消息
+                    await query.message.reply_text(
+                        message,
+                        reply_markup=reply_markup,
+                        parse_mode='HTML'
+                    )
+                    # 尝试删除旧消息
+                    try:
+                        await query.message.delete()
+                    except Exception as del_err:
+                        logger.warning(f"删除旧消息失败: {del_err}")
                 else:
                     # 其他错误需要处理
                     raise
+            except Exception as e:
+                logger.error(f"编辑消息时出错: {e}", exc_info=True)
+                # 尝试发送新消息作为备选方案
+                await query.message.reply_text(
+                    message,
+                    reply_markup=reply_markup,
+                    parse_mode='HTML'
+                )
 
     except Exception as e:
         logger.error(f"刷新抽奖列表时出错: {e}", exc_info=True)
-        # 只在非"Message is not modified"错误时显示错误消息
-        if not isinstance(e, BadRequest) or "Message is not modified" not in str(e):
-            await query.message.reply_text("❌ 刷新列表失败，请稍后重试")
+        try:
+            # 发送错误提示
+            error_keyboard = [[InlineKeyboardButton("🔙 返回", callback_data='back_to_main')]]
+            await query.message.reply_text(
+                "❌ 刷新列表失败，请稍后重试",
+                reply_markup=InlineKeyboardMarkup(error_keyboard)
+            )
+        except Exception as err:
+            logger.error(f"发送错误消息失败: {err}")
 
