@@ -123,8 +123,7 @@ async def init_db():
                                 {'bsonType': 'date'},
                                 {'bsonType': 'null'}
                             ]
-                        },
-                        'message_count_tracked': {'bsonType': 'bool'}
+                        }
                     }
                 }
             },
@@ -296,8 +295,7 @@ COLLECTION_SCHEMAS = {
         'required_groups': list,
         'draw_method': str,  
         'participant_count': int,
-        'draw_time': datetime,
-        'message_count_tracked': bool
+        'draw_time': datetime
     },
     'prizes': {
         'lottery_id': str,
