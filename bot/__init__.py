@@ -1,14 +1,21 @@
 from telegram.ext import Application, CallbackQueryHandler
+from fastapi import FastAPI
 from bot.tasks import check_lottery_draws, ping_service
 from config import TELEGRAM_BOT_TOKEN
 from utils import logger, reset_initialization
 from bot.bot_instance import set_application, get_bot
+
+app = FastAPI()
 from bot.commands import register_commands
 from bot.callbacks import handle_callback_query
 import asyncio
+application = None
+tasks = []
+
 
 async def create_bot():
     """创建并初始化bot"""
+    global application
     try:
         # 重置初始化状态
         reset_initialization()
@@ -45,7 +52,8 @@ async def create_bot():
 async def start_bot():
     """启动机器人轮询（如果尚未启动）"""
     try:
-        application = get_bot()
+        global application
+
         if not application or not application.running:  # 增加实例存在性检查
             application = await create_bot()
             if application:
@@ -60,8 +68,8 @@ async def start_bot():
 
 async def stop_bot():
     """停止机器人"""
-    application = get_bot()
-    if application and application.running:
+    global application
+    if application:
         try:
             await application.updater.stop()
             await application.stop()
@@ -72,6 +80,7 @@ async def stop_bot():
 
 async def start_background_tasks():
     """启动后台任务"""
+    global tasks
     try:
         # 创建任务组
         tasks = [
@@ -79,11 +88,47 @@ async def start_background_tasks():
             asyncio.create_task(ping_service())  # 添加唤醒服务任务
         ]
         
-        # 等待所有任务
-        await asyncio.gather(*tasks)
-        
+        def handle_task_result(task):
+            try:
+                exc = task.exception()
+                if exc and not isinstance(exc, asyncio.CancelledError):
+                    logger.error(f"后台任务异常终止: {exc}")
+            except asyncio.CancelledError:
+                pass
+        # 任务异常处理
+        for task in tasks:
+            task.add_done_callback(handle_task_result)
+
+        logger.info("后台任务已启动")
+
     except Exception as e:
         logger.error(f"启动后台任务时出错: {e}", exc_info=True)
+
+async def monitor_tasks():
+    """监控后台任务"""
+    while True:
+        try:
+            # 检查任务状态
+            for task in tasks:
+                if task.done():
+                    exception = task.exception()
+                    if exception:
+                        logger.error(f"后台任务出错: {exception}")
+                        # 重启出错的任务
+                        if "ping_service" in str(task.get_name()):
+                            tasks.remove(task)
+                            tasks.append(asyncio.create_task(ping_service()))
+                            logger.info("已重启 ping_service 任务")
+                        elif "check_lottery_draws" in str(task.get_name()):
+                            tasks.remove(task)
+                            tasks.append(asyncio.create_task(check_lottery_draws()))
+                            logger.info("已重启 check_lottery_draws 任务")
+                            
+        except Exception as e:
+            logger.error(f"监控任务时出错: {e}", exc_info=True)
+            
+        await asyncio.sleep(60)  # 每分钟检查一次
+
 
 # 定义导出的函数
 __all__ = [
