@@ -95,12 +95,12 @@ async def health_check():
                     status["details"].append(f"任务异常: {task.exception()}")
 
             if active_count > 0:
-                status["tasks"] = True
+                status["background_tasks"] = True
             else:
                 status["details"].append("所有后台任务已停止")
 
         # 确定响应状态码
-        if all([status["database"], status["bot"], status["tasks"]]):
+        if all([status["database"], status["bot"], status["background_tasks"]]):
             return {
                 "status": "healthy",
                 "checks": status
