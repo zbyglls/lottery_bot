@@ -321,7 +321,7 @@ async def create_lottery(
         )
 
 
-        logger.info(await db.lotteries.find_one({'id': lottery_id}))
+        
         # 5. 创建抽奖设置
         lottery_settings = {
             'lottery_id': lottery_id,

@@ -188,7 +188,6 @@ async def send_lottery_info_to_creator(creator_id: str, lottery_data: dict):
                 parse_mode='HTML',
                 disable_web_page_preview=False
             )
-        logger.info(f"已发送抽奖信息给创建者 {creator_id}")
         return True
 
     except Exception as e:
@@ -239,7 +238,6 @@ async def send_winner_notification(winner_id: int, lottery_info: dict, prize_inf
                 reply_markup=reply_markup,
                 parse_mode='HTML'
             )
-            logger.info(f"已发送中奖通知给用户 {winner_id}")
             return True
 
         except Exception as e:
@@ -413,7 +411,6 @@ async def send_lottery_result_to_group(winners: list, groups: list):
         ]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         # 发送消息到群组
-        logger.info(f"准备发送开奖结果到群组: {groups}")
         for group_id in groups:
             try:
                 await bot.send_message(
@@ -423,7 +420,6 @@ async def send_lottery_result_to_group(winners: list, groups: list):
                     disable_web_page_preview=True,
                     reply_markup=reply_markup
                 )
-                logger.info(f"已发送开奖结果到群组 {group_id}")
             except Exception as e:
                 logger.error(f"发送开奖结果到群组 {group_id} 时出错: {e}")
     except Exception as e:
@@ -445,7 +441,6 @@ async def handle_keyword_participate(update: Update, context):
             return
         
         chat_id = message.chat.id
-        logger.info(f"收到消息: {message.text} from {user.full_name} in chat {chat_id}")
         # 检查是否是群组消息
         if message.chat.type not in ['group', 'supergroup']:
             logger.debug(f"不是群组消息: {message.chat.type}")
@@ -532,8 +527,6 @@ async def handle_keyword_participate(update: Update, context):
             f"🔔 开奖后会通过机器人私信通知",
             reply_to_message_id=message.message_id
         )
-            
-        logger.info(f"用户 {user.full_name} (ID: {user.id}) 成功参与抽奖 {lottery['title']}")
 
     except Exception as e:
         logger.error(f"处理关键词参与抽奖时出错: {e}", exc_info=True)
@@ -625,7 +618,6 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
                   
                 if last_message_time and last_message_time < check_start_time:
                     # 超时清除记录
-                    logger.info(f"用户 {user_id} 的发言记录已超时，清除记录")
                     await db.message_counts.delete_one({
                         'lottery_id': lottery_id,
                         'user_id': Int64(user_id),
@@ -648,7 +640,6 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
             message_time = update.message.date.replace(tzinfo=timezone.utc)
             if message_time >= check_start_time:
                 message_count += 1
-                logger.info(f"用户 {user_id} 新增一条有效消息，当前数量: {message_count}")
 
                 # 更新或插入消息计数
                 await db.message_counts.update_one(
@@ -672,12 +663,9 @@ async def check_user_messages(bot, user_id: int, group_id: str, required_count: 
 
         # 检查是否达到要求
         if message_count >= required_count:
-            logger.info(f"用户 {user_id} 已达到发言要求: {message_count}/{required_count}")
             return True
 
         # 如果发言数量不足且超过时间范围，返回 False
-        if message_count > 0:
-            logger.info(f"用户 {user_id} 发言数量不足: {message_count}/{required_count}")
         return False
 
     except Exception as e:
@@ -745,17 +733,16 @@ async def handle_message_count_participate(update: Update, context):
         for lottery in lotteries:
             lottery_id = lottery['lottery_id']
             title = lottery['title']
-            logger.info(f"找到发言数量参与的抽奖活动: {title}")
 
             # 检查重复参与
             existing = await db.participants.find_one({
                 'lottery_id': lottery_id,
                 'user_id': Int64(user.id)
             })
-            
+
             if existing:
-                logger.info(f"用户 {user.full_name} (ID: {user.id}) 已参与过抽奖 {title}")
                 return
+            
             # 检查用户名要求
             if lottery.get('require_username') and not user.username:
                 await message.reply_text(
@@ -816,7 +803,6 @@ async def handle_message_count_participate(update: Update, context):
                 reply_to_message_id=message.message_id
             )
             
-            logger.info(f"用户 {user.full_name} (ID: {user.id}) 成功参与抽奖 {title}")
             # 清除该用户的消息记录数据
             await db.message_counts.delete_one({
                 'lottery_id': lottery_id,

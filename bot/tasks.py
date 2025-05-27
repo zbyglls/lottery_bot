@@ -57,7 +57,6 @@ async def check_lottery_draws():
                 }
             ]
             time_draws = await db.lotteries.aggregate(pipeline_time).to_list(None)
-            logger.info(f"定时开奖抽奖活动: {time_draws}")
 
             # 2. 查找满人开奖的抽奖
             pipeline_full = [
@@ -111,7 +110,6 @@ async def check_lottery_draws():
                 }
             ]
             full_draws = await db.lotteries.aggregate(pipeline_full).to_list(None)
-            logger.info(f"满人开奖抽奖活动: {full_draws}")
 
             # 处理定时开奖
             for lottery in time_draws:

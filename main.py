@@ -126,7 +126,6 @@ async def health_check(request: Request):
             "checks": status
         }
 
-        logger.info(f"健康检查结果: {response_data['status']}")
         return Response(
             content=json.dumps(response_data, ensure_ascii=False),
             status_code=200 if is_healthy else 503,

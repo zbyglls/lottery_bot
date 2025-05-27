@@ -129,7 +129,7 @@ async def check_lottery_status(lottery_id: str, user_id: str) -> dict:
                     }
                 }
             )
-            logger.info(f"抽奖 {lottery_id} 已过期，状态更新为 cancelled")
+            
             return {
                 'valid': False,
                 'message': '抽奖创建链接已过期'
@@ -146,7 +146,6 @@ async def check_lottery_status(lottery_id: str, user_id: str) -> dict:
                     }
                 }
             )
-            logger.info(f"抽奖 {lottery_id} 状态更新为 creating")
             return {
                 'valid': True,
                 'status': 'creating',

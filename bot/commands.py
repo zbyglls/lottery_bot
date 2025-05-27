@@ -81,7 +81,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await message.reply_text(welcome_message, reply_markup=reply_markup)
-        # return SELECTING_ACTION
+        
     except Exception as e:
         logger.error(f"处理 start 命令时出错: {e}", exc_info=True)
         await message.reply_text("❌ 处理命令时出错，请稍后重试")
@@ -145,7 +145,6 @@ async def new_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /new 命令 - 新建普通抽奖"""
     try:
         user = update.effective_user
-        logger.info(f"收到 /new 命令，来自用户: {user.id}")
         
         # 检查用户是否关注了频道
         is_subscribed = await check_channel_subscription(context.bot, user.id)

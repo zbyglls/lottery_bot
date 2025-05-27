@@ -47,7 +47,6 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         if callback_data.startswith('cancel_lottery_'):
             # 处理取消创建抽奖
             lottery_id = callback_data.replace('cancel_lottery_', '')
-            logger.info(f"用户 {query.from_user.id} 请求取消创建抽奖 {lottery_id}")
             
             try:
                 # 检查抽奖状态
@@ -627,9 +626,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                                     reply_markup=reply_markup,
                                     parse_mode='HTML',
                                     disable_web_page_preview=False
-                                )
-                        logger.info(f"发布到频道 - -1001526013692")
-                    logger.info(f"抽奖 {lottery_id} 已成功发布到群组 {group_id}")
+                                )  
                 else:
                     await context.bot.send_message(chat_id=query.message.chat_id, text="❌ 发布失败，请重试")
             except Exception as e:

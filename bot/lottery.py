@@ -130,7 +130,6 @@ async def draw_lottery(bot: Bot, lottery_id: str):
         )
 
         # 发送中奖通知
-        logger.info("准备给中奖者发送中奖通知")
         await send_batch_winner_notifications(winners, creator_id)
         
         # 发送群组通知
@@ -139,7 +138,6 @@ async def draw_lottery(bot: Bot, lottery_id: str):
                 winners,
                 lottery_info['groups']
             )
-        logger.info("成功发送中奖通知和群组通知")
 
         return True
         

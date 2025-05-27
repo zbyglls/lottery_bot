@@ -32,7 +32,6 @@ class MongoDBConnection:
                         deprecation_errors=True))
                 cls._db = client[MONGO_DB]
                 cls._instance = client
-                logger.info("MongoDB 连接成功")
             except Exception as e:
                 logger.error(f"MongoDB 连接失败: {e}", exc_info=True)
                 raise
