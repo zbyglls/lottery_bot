@@ -1,8 +1,5 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
-import aiohttp
-from bson.objectid import ObjectId 
-from config import SERVICE_URL
 from utils import logger
 from bot.bot_instance import get_bot
 from bot.lottery import draw_lottery
@@ -223,27 +220,4 @@ async def cleanup_old_lotteries():
     except Exception as e:
         logger.error(f"清理过期抽奖记录时出错: {e}", exc_info=True)
 
-async def ping_service():
-    """定时唤醒服务"""
-    while True:
-        try:
-            # 构造请求 URL
-            service_url = SERVICE_URL
-            headers = {
-                'User-Agent': 'Bot-KeepAlive/1.0',
-                'Cache-Control': 'no-cache'
-            }
-            async with aiohttp.ClientSession() as session:
-                async with session.get(service_url, headers=headers, timeout=30, allow_redirects=True) as response:
-                    if response.status == 200:
-                        logger.info("服务唤醒成功")
-                    else:
-                        logger.warning(f"服务唤醒失败: {response.status}")
-                        
-        except asyncio.TimeoutError:
-            logger.error("服务保活请求超时")                
-        except Exception as e:
-            logger.error(f"服务唤醒出错: {e}", exc_info=True)
 
-        # 每10分钟唤醒一次
-        await asyncio.sleep(10 * 60)

@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from utils import logger
 from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 
@@ -36,5 +35,4 @@ JOB_QUEUE_WORKERS = 4  # 工作线程数
 
 # 域名配置
 YOUR_DOMAIN = os.getenv('YOUR_DOMAIN')
-SERVICE_URL = os.getenv('SERVER_URL')
 

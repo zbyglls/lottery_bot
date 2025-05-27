@@ -1,10 +1,10 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import IndexModel, ASCENDING, DESCENDING
-from datetime import datetime, timezone
+from datetime import datetime
 import pymongo
 from config import MONGO_URI, MONGO_DB
 from utils import logger, mark_initialized
-from typing import Optional, Dict
+
 
 
 class MongoDBConnection:

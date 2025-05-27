@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 from telegram.ext import Application, CallbackQueryHandler
 from fastapi import FastAPI
-from bot.tasks import check_lottery_draws, ping_service
+from bot.tasks import check_lottery_draws
 from config import TELEGRAM_BOT_TOKEN
 from utils import logger, reset_initialization
 from bot.bot_instance import set_application, get_bot
@@ -90,9 +90,8 @@ async def start_background_tasks():
         # 创建任务组
         bot_state.tasks = [
             asyncio.create_task(check_lottery_draws()),
-            asyncio.create_task(ping_service())  # 添加唤醒服务任务
         ]
-        
+
         def handle_task_result(task):
             try:
                 exc = task.exception()
@@ -120,14 +119,9 @@ async def monitor_tasks():
                     if exception:
                         logger.error(f"后台任务出错: {exception}")
                         # 重启出错的任务
-                        if "ping_service" in str(task.get_name()):
-                            bot_state.tasks.remove(task)
-                            bot_state.tasks.append(asyncio.create_task(ping_service()))
-                            logger.info("已重启 ping_service 任务")
-                        elif "check_lottery_draws" in str(task.get_name()):
-                            bot_state.tasks.remove(task)
-                            bot_state.tasks.append(asyncio.create_task(check_lottery_draws()))
-                            logger.info("已重启 check_lottery_draws 任务")
+                        bot_state.tasks.remove(task)
+                        bot_state.tasks.append(asyncio.create_task(check_lottery_draws()))
+                        logger.info("已重启 check_lottery_draws 任务")
                             
         except Exception as e:
             logger.error(f"监控任务时出错: {e}", exc_info=True)

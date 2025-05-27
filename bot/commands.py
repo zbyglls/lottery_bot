@@ -5,7 +5,6 @@ from utils import logger
 from bson import Int64
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
-from bot.conversation import SELECTING_ACTION
 from config import YOUR_DOMAIN
 from bot.verification import check_channel_subscription, check_lottery_creation
 from bot.callbacks import handle_callback_query

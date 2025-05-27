@@ -1,7 +1,6 @@
 import random
 from datetime import datetime, timezone
-from telegram import Bot
-from bson.objectid import ObjectId 
+from telegram import Bot 
 from app.database import MongoDBConnection
 from bot.handlers import send_batch_winner_notifications, send_lottery_result_to_group
 from utils import logger

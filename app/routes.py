@@ -10,8 +10,7 @@ import json
 from bot.handlers import send_lottery_info_to_creator
 from bot.verification import check_lottery_status
 from bot.bot_instance import get_bot
-from app.database import MongoDBConnection
-from bson.objectid import ObjectId 
+from app.database import MongoDBConnection 
 from utils import logger, parse_group_input, parse_time
 from telegram.error import TelegramError
 

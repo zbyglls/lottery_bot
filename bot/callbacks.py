@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from bson import Int64
-from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
 from app.database import MongoDBConnection

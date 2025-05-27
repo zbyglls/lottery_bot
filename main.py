@@ -2,7 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import json
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from app.routes import router as api_router
 from config import BASE_DIR, templates
@@ -54,10 +54,15 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), name="static")
 app.include_router(api_router)
 
+
+@app.head("/health")
 @app.get("/health")
-async def health_check():
+async def health_check(request: Request):
     """健康检查接口"""
     try:
+        if request.method == "HEAD":
+            return Response(status_code=200)
+        
         status = {
             "database": False,
             "bot": False,
