@@ -329,6 +329,11 @@ def register_commands(app):
     app.add_handler(CallbackQueryHandler(verify_follow, pattern='^verify_follow$'))
     app.add_handler(MessageHandler(keyword_filter, handle_keyword_participate), group=1)
     app.add_handler(MessageHandler(message_count_filter, handle_message_count_participate), group=2)
-    app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL | filters.AUDIO | filters.Sticker.ALL, handle_media_message), group=3)
+    media_filter = (
+        (filters.PHOTO | filters.VIDEO | filters.Document.ALL | filters.AUDIO | filters.Sticker.ALL) & 
+        filters.ChatType.PRIVATE
+    )
+    app.add_handler(MessageHandler(media_filter, handle_media_message), group=3)
+
 
 
